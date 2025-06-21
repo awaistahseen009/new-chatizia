@@ -274,7 +274,7 @@ const Analytics: React.FC = () => {
             
             <div className="space-y-3">
               <div className="flex justify-between items-center">
-                <span className="text-sm text-slate-600">< 1s</span>
+                <span className="text-sm text-slate-600">&lt; 1s</span>
                 <span className="text-sm font-medium text-slate-800">87%</span>
               </div>
               <div className="flex justify-between items-center">
@@ -286,7 +286,7 @@ const Analytics: React.FC = () => {
                 <span className="text-sm font-medium text-slate-800">3%</span>
               </div>
               <div className="flex justify-between items-center">
-                <span className="text-sm text-slate-600">> 5s</span>
+                <span className="text-sm text-slate-600">&gt; 5s</span>
                 <span className="text-sm font-medium text-slate-800">1%</span>
               </div>
             </div>
