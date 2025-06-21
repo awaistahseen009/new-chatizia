@@ -21,17 +21,6 @@ export const useChatbot = (chatbot: Chatbot | null) => {
   const [isEscalated, setIsEscalated] = useState(false);
   const { fetchSimilarChunks } = useDocuments();
 
-  // Helper function to generate a simple hash (avoiding crypto.subtle.digest issues)
-  const generateSimpleHash = (text: string): string => {
-    let hash = 0;
-    for (let i = 0; i < text.length; i++) {
-      const char = text.charCodeAt(i);
-      hash = ((hash << 5) - hash) + char;
-      hash = hash & hash; // Convert to 32-bit integer
-    }
-    return Math.abs(hash).toString(36);
-  };
-
   const sendMessage = async (userMessage: string): Promise<void> => {
     if (!chatbot) return;
 
@@ -108,15 +97,17 @@ export const useChatbot = (chatbot: Chatbot | null) => {
       if (chatbot.knowledge_base_id) {
         console.log('🔍 Searching knowledge base for relevant content...');
         // Pass chatbot ID for public access in embedded mode
-        const similarChunks = await fetchSimilarChunks(userMessage, 3, chatbot.id);
+        const similarChunks = await fetchSimilarChunks(userMessage, 5, chatbot.id);
         
         if (similarChunks.length > 0) {
+          // Create comprehensive context from chunks
           context = similarChunks
-            .map(chunk => chunk.chunk_text)
+            .map((chunk, index) => `[Source ${index + 1}]: ${chunk.chunk_text}`)
             .join('\n\n');
           
-          sources = similarChunks.map(chunk => `Document chunk ${chunk.chunk_index + 1}`);
-          console.log(`✅ Found ${similarChunks.length} relevant chunks`);
+          sources = similarChunks.map((chunk, index) => `Knowledge Base - Chunk ${index + 1}`);
+          console.log(`✅ Found ${similarChunks.length} relevant chunks, context length: ${context.length} characters`);
+          console.log('📄 Context preview:', context.substring(0, 200) + '...');
         } else {
           console.log('ℹ️ No relevant chunks found in knowledge base');
         }
@@ -136,9 +127,12 @@ export const useChatbot = (chatbot: Chatbot | null) => {
         content: userMessage
       });
 
-      // Generate response using OpenAI
-      console.log('🤖 Generating AI response...');
-      const response = await generateChatResponse(chatHistory, context);
+      // Generate response using OpenAI with enhanced context handling
+      console.log('🤖 Generating AI response with context...');
+      console.log('📊 Context available:', !!context);
+      console.log('📊 Context length:', context.length);
+      
+      const response = await generateChatResponse(chatHistory, context, chatbot.configuration?.personality);
 
       // Add bot response to UI
       const botMessage: ChatbotMessage = {
@@ -146,7 +140,7 @@ export const useChatbot = (chatbot: Chatbot | null) => {
         text: response.message,
         sender: 'bot',
         timestamp: new Date(),
-        sources: response.sources || sources,
+        sources: response.sources || (sources.length > 0 ? sources : undefined),
       };
 
       setMessages(prev => [...prev, botMessage]);

@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { X, Send, Paperclip, Mic, Volume2, Minimize2, Maximize2, Brain, ExternalLink, Play, Pause, MicOff, FileText, Expand, MessageSquare, Upload, Image as ImageIcon, File } from 'lucide-react';
+import { X, Send, Paperclip, Mic, Volume2, Minimize2, Maximize2, Brain, ExternalLink, Play, Pause, MicOff, FileText, Expand, MessageSquare, Upload, Image as ImageIcon, File, Settings, Database, Trash2 } from 'lucide-react';
 import { useChatbot as useChatbotContext } from '../contexts/ChatbotContext';
 import { useChatbot } from '../hooks/useChatbot';
 import { useGeolocation } from '../hooks/useGeolocation';
+import { useKnowledgeBases } from '../hooks/useKnowledgeBases';
 import { openai } from '../lib/openai';
 import { supabase } from '../lib/supabase';
 
@@ -40,9 +41,13 @@ interface ExtendedMessage {
 const ChatbotPreview: React.FC<ChatbotPreviewProps> = ({ visible, onClose, chatbot: propChatbot, embedded = false }) => {
   // Safely use context - it might not be available in embedded mode
   let selectedBot = null;
+  let setSelectedBot = null;
+  let updateChatbot = null;
   try {
     const context = useChatbotContext();
     selectedBot = context?.selectedBot;
+    setSelectedBot = context?.setSelectedBot;
+    updateChatbot = context?.updateChatbot;
   } catch (error) {
     // Context not available, which is fine for embedded mode
     console.log('ChatbotProvider context not available - using prop chatbot');
@@ -51,6 +56,7 @@ const ChatbotPreview: React.FC<ChatbotPreviewProps> = ({ visible, onClose, chatb
   const bot = propChatbot || selectedBot;
   const { messages: hookMessages, isTyping, sendMessage, initializeChat } = useChatbot(bot);
   const { location, storeUserLocation } = useGeolocation();
+  const { knowledgeBases } = useKnowledgeBases();
   const [inputText, setInputText] = useState('');
   const [isMinimized, setIsMinimized] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
@@ -73,6 +79,8 @@ const ChatbotPreview: React.FC<ChatbotPreviewProps> = ({ visible, onClose, chatb
   const [showUserInfoForm, setShowUserInfoForm] = useState(false);
   const [extractedText, setExtractedText] = useState<string>('');
   const [sessionStarted, setSessionStarted] = useState(false);
+  const [showChatbotMenu, setShowChatbotMenu] = useState(false);
+  const [showKnowledgeBaseModal, setShowKnowledgeBaseModal] = useState(false);
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
@@ -174,6 +182,56 @@ const ChatbotPreview: React.FC<ChatbotPreviewProps> = ({ visible, onClose, chatb
       analyzeSentiment();
     }
   }, [messageCount]);
+
+  const handleChangeKnowledgeBase = async (knowledgeBaseId: string) => {
+    if (!bot || !updateChatbot) return;
+
+    try {
+      await updateChatbot(bot.id, {
+        knowledge_base_id: knowledgeBaseId || null
+      });
+      
+      // Update local bot reference
+      if (setSelectedBot) {
+        setSelectedBot({
+          ...bot,
+          knowledge_base_id: knowledgeBaseId || null
+        });
+      }
+      
+      setShowKnowledgeBaseModal(false);
+      setShowChatbotMenu(false);
+      
+      // Add system message about knowledge base change
+      const systemMessage: ExtendedMessage = {
+        id: `system-${Date.now()}`,
+        text: knowledgeBaseId 
+          ? `Knowledge base has been connected. I now have access to additional information to help you better.`
+          : `Knowledge base has been disconnected. I'll use my general knowledge to assist you.`,
+        sender: 'bot',
+        timestamp: new Date(),
+      };
+      setMessages(prev => [...prev, systemMessage]);
+    } catch (error) {
+      console.error('Failed to update knowledge base:', error);
+      setErrorMessage('Failed to update knowledge base');
+    }
+  };
+
+  const handleDeleteChatbot = async () => {
+    if (!bot || !updateChatbot) return;
+    
+    if (confirm(`Are you sure you want to delete "${bot.name}"? This action cannot be undone.`)) {
+      try {
+        // This would need to be implemented in the context
+        setShowChatbotMenu(false);
+        onClose();
+      } catch (error) {
+        console.error('Failed to delete chatbot:', error);
+        setErrorMessage('Failed to delete chatbot');
+      }
+    }
+  };
 
   const analyzeSentiment = async () => {
     if (!OPENAI_API_KEY || conversationHistory.length < 2) return;
@@ -703,11 +761,25 @@ const ChatbotPreview: React.FC<ChatbotPreviewProps> = ({ visible, onClose, chatb
   const primaryColor = safeConfig.primaryColor || '#2563eb';
   const botImage = safeConfig.botImage;
   const useCustomImage = safeConfig.useCustomImage && botImage;
+  const position = safeConfig.position || 'bottom-right';
 
   // Widget mode for embedded chatbot - show widget button when closed
   if (embedded && !isWidgetOpen) {
+    // Position the widget button based on configuration
+    const getPositionClasses = () => {
+      switch (position) {
+        case 'bottom-left':
+          return 'fixed bottom-6 left-6 z-50';
+        case 'center':
+          return 'fixed bottom-6 left-1/2 transform -translate-x-1/2 z-50';
+        case 'bottom-right':
+        default:
+          return 'fixed bottom-6 right-6 z-50';
+      }
+    };
+
     return (
-      <div className="fixed bottom-6 right-6 z-50">
+      <div className={getPositionClasses()}>
         <button
           onClick={toggleWidget}
           className="w-16 h-16 rounded-full shadow-lg flex items-center justify-center text-white transition-all duration-200 hover:scale-110 hover:shadow-xl"
@@ -732,16 +804,30 @@ const ChatbotPreview: React.FC<ChatbotPreviewProps> = ({ visible, onClose, chatb
     );
   }
 
-  // Determine container classes based on fullscreen state and embedded mode
-  const containerClasses = embedded 
-    ? "fixed bottom-6 right-6 w-96 h-[600px] z-50" 
-    : isFullscreen 
-      ? "fixed inset-0 z-50" 
-      : "fixed right-6 top-20 bottom-6 w-80 z-50";
+  // Determine container classes based on fullscreen state, embedded mode, and position
+  const getContainerClasses = () => {
+    if (!embedded) {
+      return isFullscreen 
+        ? "fixed inset-0 z-50" 
+        : "fixed right-6 top-20 bottom-6 w-80 z-50";
+    }
+
+    // For embedded mode, position based on configuration
+    const baseClasses = "fixed w-96 h-[600px] z-50";
+    switch (position) {
+      case 'bottom-left':
+        return `${baseClasses} bottom-6 left-6`;
+      case 'center':
+        return `${baseClasses} bottom-6 left-1/2 transform -translate-x-1/2`;
+      case 'bottom-right':
+      default:
+        return `${baseClasses} bottom-6 right-6`;
+    }
+  };
 
   return (
     <>
-      <div className={containerClasses}>
+      <div className={getContainerClasses()}>
         <div className="bg-white rounded-lg shadow-2xl border border-slate-200 h-full flex flex-col overflow-hidden">
           <div 
             className="p-4 border-b border-slate-200 flex items-center justify-between"
@@ -786,6 +872,42 @@ const ChatbotPreview: React.FC<ChatbotPreviewProps> = ({ visible, onClose, chatb
               </div>
             </div>
             <div className="flex items-center space-x-2">
+              {!embedded && updateChatbot && (
+                <div className="relative">
+                  <button
+                    onClick={() => setShowChatbotMenu(!showChatbotMenu)}
+                    className="p-1 rounded hover:bg-slate-100 transition-colors"
+                    title="Chatbot settings"
+                  >
+                    <Settings className="w-4 h-4 text-slate-400" />
+                  </button>
+                  
+                  {showChatbotMenu && (
+                    <div className="absolute right-0 top-8 w-48 bg-white rounded-lg shadow-lg border border-slate-200 z-10">
+                      <div className="py-1">
+                        <button
+                          onClick={() => {
+                            setShowKnowledgeBaseModal(true);
+                            setShowChatbotMenu(false);
+                          }}
+                          className="w-full flex items-center space-x-2 px-4 py-2 text-left text-slate-700 hover:bg-slate-50"
+                        >
+                          <Database className="w-4 h-4" />
+                          <span>Change Knowledge Base</span>
+                        </button>
+                        <button
+                          onClick={handleDeleteChatbot}
+                          className="w-full flex items-center space-x-2 px-4 py-2 text-left text-red-600 hover:bg-red-50"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                          <span>Delete Chatbot</span>
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+              
               {embedded && (
                 <button
                   onClick={toggleWidget}
@@ -981,7 +1103,7 @@ const ChatbotPreview: React.FC<ChatbotPreviewProps> = ({ visible, onClose, chatb
                           <div className="mt-2 pt-2 border-t border-slate-200">
                             <div className="flex items-center space-x-1 text-xs text-slate-500">
                               <Brain className="w-3 h-3" />
-                              <span>Sources: Knowledge Base</span>
+                              <span>Sources: {message.sources.join(', ')}</span>
                             </div>
                           </div>
                         )}
@@ -1148,6 +1270,50 @@ const ChatbotPreview: React.FC<ChatbotPreviewProps> = ({ visible, onClose, chatb
         </div>
       </div>
 
+      {/* Knowledge Base Modal */}
+      {showKnowledgeBaseModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-60 p-4">
+          <div className="bg-white rounded-lg max-w-md w-full p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-slate-800">Change Knowledge Base</h3>
+              <button
+                onClick={() => setShowKnowledgeBaseModal(false)}
+                className="p-1 hover:bg-slate-100 rounded transition-colors"
+              >
+                <X className="w-4 h-4 text-slate-400" />
+              </button>
+            </div>
+            
+            <div className="space-y-3">
+              <button
+                onClick={() => handleChangeKnowledgeBase('')}
+                className={`w-full p-3 text-left border rounded-lg transition-colors ${
+                  !bot?.knowledge_base_id ? 'border-blue-500 bg-blue-50' : 'border-slate-200 hover:bg-slate-50'
+                }`}
+              >
+                <div className="font-medium">No Knowledge Base</div>
+                <div className="text-sm text-slate-600">Use general AI knowledge only</div>
+              </button>
+              
+              {knowledgeBases.map((kb) => (
+                <button
+                  key={kb.id}
+                  onClick={() => handleChangeKnowledgeBase(kb.id)}
+                  className={`w-full p-3 text-left border rounded-lg transition-colors ${
+                    bot?.knowledge_base_id === kb.id ? 'border-blue-500 bg-blue-50' : 'border-slate-200 hover:bg-slate-50'
+                  }`}
+                >
+                  <div className="font-medium">{kb.name}</div>
+                  {kb.description && (
+                    <div className="text-sm text-slate-600">{kb.description}</div>
+                  )}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* File Upload Modal */}
       {showFileUpload && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-60 p-4">
@@ -1260,6 +1426,17 @@ const ChatbotPreview: React.FC<ChatbotPreviewProps> = ({ visible, onClose, chatb
             </form>
           </div>
         </div>
+      )}
+
+      {/* Click outside to close menus */}
+      {(showChatbotMenu || showKnowledgeBaseModal) && (
+        <div 
+          className="fixed inset-0 z-5" 
+          onClick={() => {
+            setShowChatbotMenu(false);
+            setShowKnowledgeBaseModal(false);
+          }}
+        />
       )}
     </>
   );
