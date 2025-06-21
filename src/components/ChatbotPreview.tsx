@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { X, Send, Paperclip, Mic, Volume2, Minimize2, Maximize2, Brain, ExternalLink, Play, Pause, MicOff, FileText, Expand, MessageSquare, Upload, Image as ImageIcon, File } from 'lucide-react';
 import { useChatbot as useChatbotContext } from '../contexts/ChatbotContext';
 import { useChatbot } from '../hooks/useChatbot';
+import { useGeolocation } from '../hooks/useGeolocation';
 import { openai } from '../lib/openai';
 import { supabase } from '../lib/supabase';
 
@@ -49,6 +50,7 @@ const ChatbotPreview: React.FC<ChatbotPreviewProps> = ({ visible, onClose, chatb
 
   const bot = propChatbot || selectedBot;
   const { messages: hookMessages, isTyping, sendMessage, initializeChat } = useChatbot(bot);
+  const { location, storeUserLocation } = useGeolocation();
   const [inputText, setInputText] = useState('');
   const [isMinimized, setIsMinimized] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
@@ -70,6 +72,7 @@ const ChatbotPreview: React.FC<ChatbotPreviewProps> = ({ visible, onClose, chatb
   const [userInfo, setUserInfo] = useState<{name?: string, email?: string, phone?: string}>({});
   const [showUserInfoForm, setShowUserInfoForm] = useState(false);
   const [extractedText, setExtractedText] = useState<string>('');
+  const [sessionStarted, setSessionStarted] = useState(false);
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
@@ -90,6 +93,17 @@ const ChatbotPreview: React.FC<ChatbotPreviewProps> = ({ visible, onClose, chatb
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
+
+  // Store user location when session starts
+  useEffect(() => {
+    if (bot && visible && !sessionStarted && location) {
+      setSessionStarted(true);
+      storeUserLocation(bot.id, {
+        sentiment: 'neutral',
+        reaction: 'neutral'
+      });
+    }
+  }, [bot, visible, location, sessionStarted, storeUserLocation]);
 
   // Check microphone permissions and support
   useEffect(() => {
@@ -154,9 +168,9 @@ const ChatbotPreview: React.FC<ChatbotPreviewProps> = ({ visible, onClose, chatb
     }
   }, [messages, replyMode, isTyping]);
 
-  // Sentiment analysis after every 2 messages
+  // Sentiment analysis after every 3 messages
   useEffect(() => {
-    if (messageCount > 0 && messageCount % 2 === 0) {
+    if (messageCount > 0 && messageCount % 3 === 0) {
       analyzeSentiment();
     }
   }, [messageCount]);
@@ -165,7 +179,7 @@ const ChatbotPreview: React.FC<ChatbotPreviewProps> = ({ visible, onClose, chatb
     if (!OPENAI_API_KEY || conversationHistory.length < 2) return;
 
     try {
-      const recentMessages = conversationHistory.slice(-4).join('\n');
+      const recentMessages = conversationHistory.slice(-6).join('\n');
       
       const response = await openai?.chat.completions.create({
         model: 'gpt-3.5-turbo',
@@ -198,6 +212,11 @@ const ChatbotPreview: React.FC<ChatbotPreviewProps> = ({ visible, onClose, chatb
         
         // Store interaction in database
         await storeUserInteraction(sentiment, 'worse');
+      } else {
+        // Store positive/neutral interactions periodically
+        if (messageCount % 5 === 0) {
+          await storeUserInteraction(sentiment, sentiment === 'positive' ? 'good' : 'neutral');
+        }
       }
     } catch (error) {
       console.error('Sentiment analysis failed:', error);
@@ -628,6 +647,9 @@ const ChatbotPreview: React.FC<ChatbotPreviewProps> = ({ visible, onClose, chatb
   const handleUserInfoSubmit = (info: {name: string, email: string, phone: string}) => {
     setUserInfo(info);
     setShowUserInfoForm(false);
+    
+    // Store the user info in the database
+    storeUserInteraction('neutral', 'neutral');
     
     const thankYouMessage: ExtendedMessage = {
       id: `thanks-${Date.now()}`,

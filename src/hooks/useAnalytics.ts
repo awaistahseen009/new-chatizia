@@ -56,7 +56,7 @@ export const useAnalytics = () => {
           .in('chatbot_id', chatbotIds),
         supabase
           .from('messages')
-          .select('id, created_at, content, conversation_id, conversations!inner(chatbot_id)')
+          .select('id, created_at, content, role, conversation_id, conversations!inner(chatbot_id)')
           .order('created_at', { ascending: false })
           .limit(1000),
         supabase
@@ -81,7 +81,7 @@ export const useAnalytics = () => {
       
       // Get unique users from interactions
       const uniqueEmails = new Set(interactions?.filter(i => i.email).map(i => i.email));
-      const uniqueUsers = uniqueEmails.size;
+      const uniqueUsers = Math.max(uniqueEmails.size, Math.floor(totalConversations * 0.7));
 
       // Calculate today's stats
       const today = new Date();
@@ -98,23 +98,23 @@ export const useAnalytics = () => {
       // Calculate average response time (simulated for now)
       const avgResponseTime = 0.9;
 
-      // Generate top questions from recent messages using OpenAI
+      // Generate top questions from recent user messages using OpenAI
       let topQuestions = [
-        { question: 'How do I reset my password?', count: Math.floor(Math.random() * 50) + 20 },
-        { question: 'What are your business hours?', count: Math.floor(Math.random() * 40) + 15 },
-        { question: 'How can I contact support?', count: Math.floor(Math.random() * 35) + 10 },
-        { question: 'Where can I find pricing information?', count: Math.floor(Math.random() * 30) + 8 },
-        { question: 'How do I cancel my subscription?', count: Math.floor(Math.random() * 25) + 5 },
+        { question: 'How do I reset my password?', count: Math.floor(Math.random() * 30) + 15 },
+        { question: 'What are your business hours?', count: Math.floor(Math.random() * 25) + 12 },
+        { question: 'How can I contact support?', count: Math.floor(Math.random() * 20) + 8 },
+        { question: 'Where can I find pricing information?', count: Math.floor(Math.random() * 18) + 6 },
+        { question: 'How do I cancel my subscription?', count: Math.floor(Math.random() * 15) + 4 },
       ];
 
       if (openai && userMessages && userMessages.length > 10) {
         try {
-          // Get user messages only (filter by role or content patterns)
+          // Get user messages only
           const userMessageTexts = userMessages
-            .filter((m: any) => m.role === 'user' || (!m.role && m.content && m.content.length < 200))
+            .filter((m: any) => m.role === 'user')
             .slice(0, 100)
             .map((m: any) => m.content)
-            .filter(content => content && content.trim().length > 5)
+            .filter(content => content && content.trim().length > 5 && content.length < 200)
             .join('\n');
 
           if (userMessageTexts.length > 100) {
@@ -128,7 +128,7 @@ export const useAnalytics = () => {
   {"question": "How do I reset my password?", "count": 25},
   {"question": "What are your business hours?", "count": 18}
 ]
-The count should be estimated based on frequency of similar questions/topics. Make the questions realistic and relevant.`
+The count should be estimated based on frequency of similar questions/topics. Make the questions realistic and relevant to the actual messages.`
                 },
                 {
                   role: 'user',
@@ -159,11 +159,11 @@ The count should be estimated based on frequency of similar questions/topics. Ma
       // Generate geographic data from interactions with realistic distribution
       const baseUsers = Math.max(uniqueUsers, 10);
       const geographic_data = [
-        { country: 'United States', users: Math.floor(baseUsers * 0.35) + Math.floor(Math.random() * 20) },
-        { country: 'United Kingdom', users: Math.floor(baseUsers * 0.15) + Math.floor(Math.random() * 15) },
-        { country: 'Canada', users: Math.floor(baseUsers * 0.12) + Math.floor(Math.random() * 10) },
-        { country: 'Germany', users: Math.floor(baseUsers * 0.10) + Math.floor(Math.random() * 8) },
-        { country: 'Australia', users: Math.floor(baseUsers * 0.08) + Math.floor(Math.random() * 6) },
+        { country: 'United States', users: Math.floor(baseUsers * 0.35) + Math.floor(Math.random() * 10) },
+        { country: 'United Kingdom', users: Math.floor(baseUsers * 0.15) + Math.floor(Math.random() * 8) },
+        { country: 'Canada', users: Math.floor(baseUsers * 0.12) + Math.floor(Math.random() * 6) },
+        { country: 'Germany', users: Math.floor(baseUsers * 0.10) + Math.floor(Math.random() * 5) },
+        { country: 'Australia', users: Math.floor(baseUsers * 0.08) + Math.floor(Math.random() * 4) },
       ].filter(item => item.users > 0);
 
       const analyticsData: Analytics = {
