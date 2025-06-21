@@ -136,10 +136,24 @@ const Dashboard: React.FC = () => {
                   <div key={bot.id} className="flex items-center justify-between p-4 border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors">
                     <div className="flex items-center space-x-4">
                       <div 
-                        className="w-10 h-10 rounded-lg flex items-center justify-center text-white font-medium"
-                        style={{ backgroundColor: bot.configuration.primaryColor }}
+                        className="w-10 h-10 rounded-lg flex items-center justify-center text-white font-medium overflow-hidden"
+                        style={{ backgroundColor: bot.configuration?.useCustomImage ? 'transparent' : (bot.configuration?.primaryColor || '#2563eb') }}
                       >
-                        {bot.name.charAt(0)}
+                        {bot.configuration?.useCustomImage && bot.configuration?.botImage ? (
+                          <img 
+                            src={bot.configuration.botImage} 
+                            alt={bot.name}
+                            className="w-full h-full object-cover rounded-lg"
+                            onError={(e) => {
+                              const target = e.target as HTMLImageElement;
+                              target.style.display = 'none';
+                              target.parentElement!.style.backgroundColor = bot.configuration?.primaryColor || '#2563eb';
+                              target.parentElement!.textContent = bot.name.charAt(0);
+                            }}
+                          />
+                        ) : (
+                          bot.name.charAt(0)
+                        )}
                       </div>
                       <div>
                         <h3 className="font-medium text-slate-800">{bot.name}</h3>
@@ -148,7 +162,7 @@ const Dashboard: React.FC = () => {
                     </div>
                     <div className="flex items-center space-x-4">
                       <div className="text-right">
-                        <p className="text-sm font-medium text-slate-800">{bot.conversations_count} conversations</p>
+                        <p className="text-sm font-medium text-slate-800">{bot.conversations_count || 0} conversations</p>
                         <p className="text-xs text-slate-500">Updated {new Date(bot.updated_at).toLocaleDateString()}</p>
                       </div>
                       <div className={`w-2 h-2 rounded-full ${

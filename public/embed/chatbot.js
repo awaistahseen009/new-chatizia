@@ -26,7 +26,6 @@
     border-radius: 12px;
     box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
     overflow: hidden;
-    background: white;
     border: 1px solid #e2e8f0;
   `;
 
@@ -45,6 +44,7 @@
     height: 100%;
     border: none;
     border-radius: 12px;
+    background: transparent;
   `;
   iframe.allow = 'microphone';
 
@@ -69,7 +69,6 @@
         border-radius: 0;
         box-shadow: none;
         overflow: hidden;
-        background: white;
         border: none;
       `;
     } else {
@@ -83,7 +82,6 @@
         border-radius: 12px;
         box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
         overflow: hidden;
-        background: white;
         border: 1px solid #e2e8f0;
       `;
     }

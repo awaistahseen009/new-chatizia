@@ -136,7 +136,7 @@ const ChatbotEmbed: React.FC = () => {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-50">
+      <div className="min-h-screen flex items-center justify-center">
         <LoadingSpinner />
       </div>
     );
@@ -144,7 +144,7 @@ const ChatbotEmbed: React.FC = () => {
 
   if (error) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-50">
+      <div className="min-h-screen flex items-center justify-center">
         <div className="text-center p-8 max-w-md mx-auto">
           <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
             <span className="text-red-600 text-2xl">⚠</span>
@@ -158,7 +158,7 @@ const ChatbotEmbed: React.FC = () => {
 
   if (!chatbot || !securityValidated) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-50">
+      <div className="min-h-screen flex items-center justify-center">
         <div className="text-center p-8 max-w-md mx-auto">
           <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-4">
             <span className="text-slate-400 text-2xl">🤖</span>
@@ -173,7 +173,7 @@ const ChatbotEmbed: React.FC = () => {
   // Render embedded chatbot - ALWAYS show the widget
   if (isEmbedded) {
     return (
-      <div className="w-full h-full min-h-screen">
+      <div className="w-full h-full min-h-screen" style={{ background: 'transparent' }}>
         <ChatbotPreview 
           visible={true} 
           onClose={() => {}} 
