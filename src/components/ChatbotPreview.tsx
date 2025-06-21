@@ -258,7 +258,7 @@ const ChatbotPreview: React.FC<ChatbotPreviewProps> = ({ visible, onClose, chatb
       });
 
       const response = await openai.chat.completions.create({
-        model: 'gpt-4-vision-preview',
+        model: 'gpt-4.1-mini',
         messages: [
           {
             role: 'user',
