@@ -108,7 +108,7 @@ const SignUpForm: React.FC = () => {
   if (success) {
     return (
       <AuthLayout
-        title="Welcome to ChatBot Pro!"
+        title="Welcome to Chatizia Pro!"
         subtitle="Your account has been created successfully"
       >
         <div className="text-center">

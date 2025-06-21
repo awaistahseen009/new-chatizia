@@ -84,7 +84,7 @@ const SignInForm: React.FC = () => {
   return (
     <AuthLayout
       title="Welcome Back"
-      subtitle="Sign in to your ChatBot Pro account"
+      subtitle="Sign in to your Chatizia Pro account"
     >
       <form onSubmit={handleSubmit} className="space-y-6">
         {errors.general && (

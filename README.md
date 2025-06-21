@@ -1,4 +1,4 @@
-# ChatBot Pro - Enterprise Multi-User SaaS Platform
+# Chatizia Pro - Enterprise Multi-User SaaS Platform
 
 A modern, full-featured chatbot SaaS platform built with React, TypeScript, and Supabase.
 
@@ -13,7 +13,7 @@ A modern, full-featured chatbot SaaS platform built with React, TypeScript, and 
 
 ## 🛠️ Tech Stack
 
-- **Frontend**: React 18, TypeScript, Tailwind CSS
+- **Frontend**: React 18, TypeScript, Tailwind CSS, GSAP
 - **Backend**: Supabase (PostgreSQL, Auth, Storage)
 - **Icons**: Lucide React
 - **Routing**: React Router DOM
@@ -24,7 +24,7 @@ A modern, full-featured chatbot SaaS platform built with React, TypeScript, and 
 1. **Clone the repository**
    ```bash
    git clone <repository-url>
-   cd chatbot-saas-platform
+   cd chatizia-pro
    ```
 
 2. **Install dependencies**

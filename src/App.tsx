@@ -5,6 +5,9 @@ import { ChatbotProvider } from './contexts/ChatbotContext';
 import Layout from './components/Layout';
 import ProtectedRoute from './components/ProtectedRoute';
 
+// Landing Page
+import LandingPage from './pages/LandingPage';
+
 // Auth Components
 import SignUpForm from './components/auth/SignUpForm';
 import SignInForm from './components/auth/SignInForm';
@@ -29,6 +32,9 @@ const AppRoutes: React.FC = () => {
 
   return (
     <Routes>
+      {/* Landing Page */}
+      <Route path="/" element={<LandingPage />} />
+
       {/* Public Routes */}
       <Route 
         path="/signup" 
@@ -114,15 +120,8 @@ const AppRoutes: React.FC = () => {
         </ProtectedRoute>
       } />
 
-      {/* Default redirects */}
-      <Route path="/" element={
-        user ? <Navigate to="/dashboard" replace /> : <Navigate to="/signin" replace />
-      } />
-      
-      {/* Catch all route */}
-      <Route path="*" element={
-        user ? <Navigate to="/dashboard" replace /> : <Navigate to="/signin" replace />
-      } />
+      {/* Catch all route - redirect to landing page */}
+      <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );
 };

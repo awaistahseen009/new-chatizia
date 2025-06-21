@@ -1,5 +1,5 @@
 {
-  "name": "chatbot-saas-platform",
+  "name": "chatizia-pro",
   "private": true,
   "version": "1.0.0",
   "type": "module",
@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.39.0",
+    "gsap": "^3.12.2",
     "lucide-react": "^0.344.0",
     "openai": "^4.28.0",
     "pdfjs-dist": "^4.0.379",
