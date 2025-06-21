@@ -8,7 +8,9 @@ import {
   BarChart3,
   PieChart,
   Globe,
-  RefreshCw
+  RefreshCw,
+  Brain,
+  Zap
 } from 'lucide-react';
 import { useAnalytics } from '../hooks/useAnalytics';
 import { useChatbot } from '../contexts/ChatbotContext';
@@ -191,32 +193,38 @@ const Analytics: React.FC = () => {
           </div>
         </div>
 
-        {/* Top Questions */}
+        {/* Top Questions from Real Data */}
         <div className="bg-white rounded-lg border border-slate-200 p-6">
           <div className="flex items-center justify-between mb-6">
             <h2 className="text-xl font-semibold text-slate-800">Most Asked Questions</h2>
-            <MessageSquare className="w-5 h-5 text-slate-400" />
+            <div className="flex items-center space-x-2">
+              <Brain className="w-4 h-4 text-purple-500" />
+              <span className="text-xs text-purple-600">AI Analyzed</span>
+            </div>
           </div>
           <div className="space-y-4">
-            {analytics?.top_questions?.map((item, index) => (
-              <div key={index} className="flex items-center justify-between">
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-slate-800 truncate">{item.question}</p>
-                  <div className="flex items-center mt-1">
-                    <div className="w-full bg-slate-200 rounded-full h-2 mr-3">
-                      <div 
-                        className="bg-blue-600 h-2 rounded-full transition-all"
-                        style={{ width: `${(item.count / (analytics.top_questions[0]?.count || 1)) * 100}%` }}
-                      ></div>
+            {analytics?.top_questions && analytics.top_questions.length > 0 ? (
+              analytics.top_questions.map((item, index) => (
+                <div key={index} className="flex items-center justify-between">
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-slate-800 truncate">{item.question}</p>
+                    <div className="flex items-center mt-1">
+                      <div className="w-full bg-slate-200 rounded-full h-2 mr-3">
+                        <div 
+                          className="bg-purple-600 h-2 rounded-full transition-all"
+                          style={{ width: `${(item.count / (analytics.top_questions[0]?.count || 1)) * 100}%` }}
+                        ></div>
+                      </div>
+                      <span className="text-xs text-slate-500 whitespace-nowrap">
+                        {item.count}
+                      </span>
                     </div>
-                    <span className="text-xs text-slate-500 whitespace-nowrap">
-                      {item.count}
-                    </span>
                   </div>
                 </div>
-              </div>
-            )) || (
+              ))
+            ) : (
               <div className="text-center py-8">
+                <MessageSquare className="w-12 h-12 text-slate-300 mx-auto mb-4" />
                 <p className="text-slate-500">No questions data available yet</p>
                 <p className="text-xs text-slate-400 mt-1">Start conversations to see popular questions</p>
               </div>
@@ -230,33 +238,39 @@ const Analytics: React.FC = () => {
         <div className="lg:col-span-2 bg-white rounded-lg border border-slate-200 p-6">
           <div className="flex items-center justify-between mb-6">
             <h2 className="text-xl font-semibold text-slate-800">Geographic Distribution</h2>
-            <Globe className="w-5 h-5 text-slate-400" />
+            <div className="flex items-center space-x-2">
+              <Globe className="w-4 h-4 text-blue-500" />
+              <span className="text-xs text-blue-600">IP Based</span>
+            </div>
           </div>
           <div className="space-y-4">
-            {analytics?.geographic_data?.map((item, index) => (
-              <div key={index} className="flex items-center justify-between">
-                <div className="flex items-center space-x-3">
-                  <div className="w-8 h-8 bg-slate-100 rounded-full flex items-center justify-center">
-                    <span className="text-xs font-medium text-slate-600">
-                      {item.country.split(' ').map(word => word[0]).join('').toUpperCase()}
+            {analytics?.geographic_data && analytics.geographic_data.length > 0 ? (
+              analytics.geographic_data.map((item, index) => (
+                <div key={index} className="flex items-center justify-between">
+                  <div className="flex items-center space-x-3">
+                    <div className="w-8 h-8 bg-slate-100 rounded-full flex items-center justify-center">
+                      <span className="text-xs font-medium text-slate-600">
+                        {item.country.split(' ').map(word => word[0]).join('').toUpperCase().slice(0, 2)}
+                      </span>
+                    </div>
+                    <span className="font-medium text-slate-800">{item.country}</span>
+                  </div>
+                  <div className="flex items-center space-x-3">
+                    <div className="w-24 bg-slate-200 rounded-full h-2">
+                      <div 
+                        className="bg-blue-600 h-2 rounded-full transition-all"
+                        style={{ width: `${(item.users / (analytics.geographic_data[0]?.users || 1)) * 100}%` }}
+                      ></div>
+                    </div>
+                    <span className="text-sm text-slate-600 w-16 text-right">
+                      {item.users}
                     </span>
                   </div>
-                  <span className="font-medium text-slate-800">{item.country}</span>
                 </div>
-                <div className="flex items-center space-x-3">
-                  <div className="w-24 bg-slate-200 rounded-full h-2">
-                    <div 
-                      className="bg-blue-600 h-2 rounded-full transition-all"
-                      style={{ width: `${(item.users / (analytics.geographic_data[0]?.users || 1)) * 100}%` }}
-                    ></div>
-                  </div>
-                  <span className="text-sm text-slate-600 w-16 text-right">
-                    {item.users}
-                  </span>
-                </div>
-              </div>
-            )) || (
+              ))
+            ) : (
               <div className="text-center py-8">
+                <Globe className="w-12 h-12 text-slate-300 mx-auto mb-4" />
                 <p className="text-slate-500">No geographic data available yet</p>
                 <p className="text-xs text-slate-400 mt-1">User interactions will populate this data</p>
               </div>
@@ -268,7 +282,7 @@ const Analytics: React.FC = () => {
         <div className="bg-white rounded-lg border border-slate-200 p-6">
           <div className="flex items-center justify-between mb-6">
             <h2 className="text-xl font-semibold text-slate-800">Response Times</h2>
-            <Clock className="w-5 h-5 text-slate-400" />
+            <Zap className="w-5 h-5 text-yellow-500" />
           </div>
           <div className="space-y-4">
             <div className="text-center">
@@ -282,7 +296,7 @@ const Analytics: React.FC = () => {
                     strokeWidth="3"
                   />
                   <path
-                    className="text-blue-600"
+                    className="text-green-600"
                     strokeDasharray="87, 100"
                     d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
                     fill="none"
@@ -299,7 +313,7 @@ const Analytics: React.FC = () => {
             
             <div className="space-y-3">
               <div className="flex justify-between items-center">
-                <span className="text-sm text-slate-600">&lt; 1s</span>
+                <span className="text-sm text-slate-600">< 1s</span>
                 <span className="text-sm font-medium text-slate-800">87%</span>
               </div>
               <div className="flex justify-between items-center">
@@ -311,7 +325,7 @@ const Analytics: React.FC = () => {
                 <span className="text-sm font-medium text-slate-800">3%</span>
               </div>
               <div className="flex justify-between items-center">
-                <span className="text-sm text-slate-600">&gt; 5s</span>
+                <span className="text-sm text-slate-600">> 5s</span>
                 <span className="text-sm font-medium text-slate-800">1%</span>
               </div>
             </div>
