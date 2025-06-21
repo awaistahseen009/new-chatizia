@@ -27,7 +27,6 @@
     box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
     overflow: hidden;
     border: 1px solid #e2e8f0;
-    background: transparent;
   `;
 
   // Create iframe
@@ -45,7 +44,6 @@
     height: 100%;
     border: none;
     border-radius: 12px;
-    background: transparent;
   `;
   iframe.allow = 'microphone';
 
@@ -71,7 +69,6 @@
         box-shadow: none;
         overflow: hidden;
         border: none;
-        background: transparent;
       `;
     } else {
       container.style.cssText = `
@@ -85,7 +82,6 @@
         box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
         overflow: hidden;
         border: 1px solid #e2e8f0;
-        background: transparent;
       `;
     }
   }
