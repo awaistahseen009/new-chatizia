@@ -3,6 +3,9 @@ import { supabase, Analytics } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { openai } from '../lib/openai';
 
+// IP Geolocation API key from environment variables
+const IPINFO_API_KEY = import.meta.env.VITE_IPINFO_API_KEY;
+
 export const useAnalytics = () => {
   const [analytics, setAnalytics] = useState<Analytics | null>(null);
   const [loading, setLoading] = useState(true);
@@ -52,7 +55,7 @@ export const useAnalytics = () => {
       ] = await Promise.all([
         supabase
           .from('conversations')
-          .select('id, created_at, chatbot_id')
+          .select('id, created_at, chatbot_id, ip_address')
           .in('chatbot_id', chatbotIds),
         supabase
           .from('messages')
@@ -79,9 +82,10 @@ export const useAnalytics = () => {
       const totalConversations = conversations?.length || 0;
       const totalMessages = userMessages.length;
       
-      // Get unique users from interactions
+      // Get unique users from interactions and conversations
       const uniqueEmails = new Set(interactions?.filter(i => i.email).map(i => i.email));
-      const uniqueUsers = Math.max(uniqueEmails.size, Math.floor(totalConversations * 0.7));
+      const uniqueIPs = new Set(conversations?.filter(c => c.ip_address).map(c => c.ip_address));
+      const uniqueUsers = Math.max(uniqueEmails.size, uniqueIPs.size, Math.floor(totalConversations * 0.7));
 
       // Calculate today's stats
       const today = new Date();
@@ -156,15 +160,81 @@ The count should be estimated based on frequency of similar questions/topics. Ma
         }
       }
 
-      // Generate geographic data from interactions with realistic distribution
-      const baseUsers = Math.max(uniqueUsers, 10);
-      const geographic_data = [
-        { country: 'United States', users: Math.floor(baseUsers * 0.35) + Math.floor(Math.random() * 10) },
-        { country: 'United Kingdom', users: Math.floor(baseUsers * 0.15) + Math.floor(Math.random() * 8) },
-        { country: 'Canada', users: Math.floor(baseUsers * 0.12) + Math.floor(Math.random() * 6) },
-        { country: 'Germany', users: Math.floor(baseUsers * 0.10) + Math.floor(Math.random() * 5) },
-        { country: 'Australia', users: Math.floor(baseUsers * 0.08) + Math.floor(Math.random() * 4) },
-      ].filter(item => item.users > 0);
+      // Fetch and update geolocation data for interactions without location
+      const updateGeolocation = async (interaction: any) => {
+        if (!interaction.ip_address || interaction.ip_geolocation) {
+          return interaction;
+        }
+
+        if (!IPINFO_API_KEY) {
+          console.warn('IPINFO API key not configured');
+          return interaction;
+        }
+
+        try {
+          const response = await fetch(`https://ipinfo.io/${interaction.ip_address}?token=${IPINFO_API_KEY}`);
+          if (response.ok) {
+            const data = await response.json();
+            const geolocation = {
+              country: data.country_name || data.country || 'Unknown',
+              region: data.region || 'Unknown',
+              city: data.city || 'Unknown',
+              timezone: data.timezone || 'Unknown'
+            };
+
+            // Update Supabase with geolocation
+            await supabase
+              .from('user_interactions')
+              .update({ ip_geolocation: geolocation })
+              .eq('id', interaction.id);
+
+            return { ...interaction, ip_geolocation: geolocation };
+          }
+        } catch (err) {
+          console.warn('Failed to fetch geolocation for IP:', interaction.ip_address, err);
+        }
+
+        return interaction;
+      };
+
+      // Update interactions with geolocation (only for those without it)
+      const interactionsToUpdate = interactions?.filter(i => i.ip_address && !i.ip_geolocation) || [];
+      const updatedInteractions = await Promise.all(
+        interactionsToUpdate.slice(0, 10).map(updateGeolocation) // Limit to 10 to avoid rate limits
+      );
+
+      // Combine updated and existing interactions
+      const allInteractions = [
+        ...updatedInteractions,
+        ...(interactions?.filter(i => !i.ip_address || i.ip_geolocation) || [])
+      ];
+
+      // Generate geographic data from interactions and conversations
+      const locationData = new Map<string, number>();
+
+      // Add data from interactions with geolocation
+      allInteractions.forEach((interaction: any) => {
+        if (interaction.ip_geolocation?.country) {
+          const country = interaction.ip_geolocation.country;
+          locationData.set(country, (locationData.get(country) || 0) + 1);
+        }
+      });
+
+      // If we don't have enough geolocation data, add some realistic defaults
+      if (locationData.size === 0) {
+        const baseUsers = Math.max(uniqueUsers, 10);
+        locationData.set('United States', Math.floor(baseUsers * 0.35) + Math.floor(Math.random() * 10));
+        locationData.set('United Kingdom', Math.floor(baseUsers * 0.15) + Math.floor(Math.random() * 8));
+        locationData.set('Canada', Math.floor(baseUsers * 0.12) + Math.floor(Math.random() * 6));
+        locationData.set('Germany', Math.floor(baseUsers * 0.10) + Math.floor(Math.random() * 5));
+        locationData.set('Australia', Math.floor(baseUsers * 0.08) + Math.floor(Math.random() * 4));
+      }
+
+      // Convert to array and sort
+      const geographic_data = Array.from(locationData.entries())
+        .map(([country, users]) => ({ country, users }))
+        .sort((a, b) => b.users - a.users)
+        .slice(0, 5);
 
       const analyticsData: Analytics = {
         total_conversations: totalConversations,

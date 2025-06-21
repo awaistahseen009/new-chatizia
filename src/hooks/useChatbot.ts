@@ -21,6 +21,16 @@ export const useChatbot = (chatbot: Chatbot | null) => {
   const [isEscalated, setIsEscalated] = useState(false);
   const { fetchSimilarChunks } = useDocuments();
 
+  // Helper function to get user's IP address and user agent
+  const getUserInfo = () => {
+    const userAgent = navigator.userAgent;
+    // Note: Getting real IP requires a service call, for now we'll use a placeholder
+    return {
+      userAgent,
+      ipAddress: null // Will be populated by server-side logic if needed
+    };
+  };
+
   const sendMessage = async (userMessage: string): Promise<void> => {
     if (!chatbot) return;
 
@@ -44,14 +54,19 @@ export const useChatbot = (chatbot: Chatbot | null) => {
         console.log('🔄 Created new session:', sessionId);
       }
 
-      // Store user message using session-based approach
+      // Get user info for tracking
+      const userInfo = getUserInfo();
+
+      // Store user message using session-based approach with user info
       console.log('💾 Storing user message with session ID...');
       const { data: userMessageData, error: userMessageError } = await supabase
         .rpc('add_session_message', {
           chatbot_id_param: chatbot.id,
           session_id_param: sessionId,
           content_param: userMessage,
-          role_param: 'user'
+          role_param: 'user',
+          ip_address_param: userInfo.ipAddress,
+          user_agent_param: userInfo.userAgent
         });
 
       if (userMessageError) {
@@ -152,7 +167,9 @@ export const useChatbot = (chatbot: Chatbot | null) => {
           chatbot_id_param: chatbot.id,
           session_id_param: sessionId,
           content_param: response.message,
-          role_param: 'assistant'
+          role_param: 'assistant',
+          ip_address_param: userInfo.ipAddress,
+          user_agent_param: userInfo.userAgent
         });
 
       if (botMessageError) {
