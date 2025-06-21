@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   CreditCard, 
   Download, 
@@ -8,12 +8,95 @@ import {
   TrendingUp,
   Zap,
   Crown,
-  Star
+  Star,
+  FileText,
+  Bot
 } from 'lucide-react';
+import { useAuth } from '../contexts/AuthContext';
+import { supabase } from '../lib/supabase';
+
+interface BillingStats {
+  totalChatbots: number;
+  totalDocuments: number;
+  messagesThisMonth: number;
+  totalConversations: number;
+}
 
 const Billing: React.FC = () => {
   const [currentPlan, setCurrentPlan] = useState('pro');
   const [billingCycle, setBillingCycle] = useState('monthly');
+  const [stats, setStats] = useState<BillingStats>({
+    totalChatbots: 0,
+    totalDocuments: 0,
+    messagesThisMonth: 0,
+    totalConversations: 0
+  });
+  const [loading, setLoading] = useState(true);
+  const { user } = useAuth();
+
+  useEffect(() => {
+    fetchBillingStats();
+  }, [user]);
+
+  const fetchBillingStats = async () => {
+    if (!user) return;
+
+    try {
+      setLoading(true);
+
+      // Get chatbots count
+      const { data: chatbots, error: chatbotsError } = await supabase
+        .from('chatbots')
+        .select('id')
+        .eq('user_id', user.id);
+
+      if (chatbotsError) throw chatbotsError;
+
+      // Get documents count
+      const { data: documents, error: documentsError } = await supabase
+        .from('documents')
+        .select('id')
+        .eq('user_id', user.id);
+
+      if (documentsError) throw documentsError;
+
+      // Get conversations count
+      const chatbotIds = chatbots?.map(bot => bot.id) || [];
+      const { data: conversations, error: conversationsError } = await supabase
+        .from('conversations')
+        .select('id')
+        .in('chatbot_id', chatbotIds);
+
+      if (conversationsError) throw conversationsError;
+
+      // Get messages this month
+      const startOfMonth = new Date();
+      startOfMonth.setDate(1);
+      startOfMonth.setHours(0, 0, 0, 0);
+
+      const { data: messages, error: messagesError } = await supabase
+        .from('messages')
+        .select('id, conversations!inner(chatbot_id)')
+        .gte('created_at', startOfMonth.toISOString());
+
+      if (messagesError) throw messagesError;
+
+      const messagesThisMonth = messages?.filter((m: any) => 
+        chatbotIds.includes(m.conversations?.chatbot_id)
+      ).length || 0;
+
+      setStats({
+        totalChatbots: chatbots?.length || 0,
+        totalDocuments: documents?.length || 0,
+        messagesThisMonth,
+        totalConversations: conversations?.length || 0
+      });
+    } catch (error) {
+      console.error('Error fetching billing stats:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const plans = [
     {
@@ -100,11 +183,6 @@ const Billing: React.FC = () => {
   ];
 
   const currentPlanData = plans.find(plan => plan.id === currentPlan);
-  const monthlyUsage = {
-    messages: 3420,
-    chatbots: 3,
-    documents: 28
-  };
 
   const invoices = [
     {
@@ -133,6 +211,14 @@ const Billing: React.FC = () => {
     }
   ];
 
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -157,37 +243,41 @@ const Billing: React.FC = () => {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
           <div className="bg-slate-50 rounded-lg p-4">
             <div className="flex items-center justify-between mb-2">
-              <span className="text-slate-600">Messages This Month</span>
-              <TrendingUp className="w-4 h-4 text-green-500" />
+              <span className="text-slate-600">Active Chatbots</span>
+              <Bot className="w-4 h-4 text-blue-500" />
             </div>
             <div className="flex items-end space-x-2">
-              <span className="text-2xl font-bold text-slate-800">{monthlyUsage.messages.toLocaleString()}</span>
-              <span className="text-slate-500">/ {typeof currentPlanData?.limits.messages === 'number' ? currentPlanData.limits.messages.toLocaleString() : currentPlanData?.limits.messages}</span>
+              <span className="text-2xl font-bold text-slate-800">{stats.totalChatbots}</span>
+              <span className="text-slate-500">/ {currentPlanData?.limits.chatbots}</span>
             </div>
             <div className="w-full bg-slate-200 rounded-full h-2 mt-2">
               <div 
-                className="bg-green-500 h-2 rounded-full transition-all"
-                style={{ width: `${Math.min((monthlyUsage.messages / (currentPlanData?.limits.messages as number)) * 100, 100)}%` }}
+                className="bg-blue-500 h-2 rounded-full transition-all"
+                style={{ 
+                  width: `${Math.min((stats.totalChatbots / (currentPlanData?.limits.chatbots as number)) * 100, 100)}%` 
+                }}
               ></div>
             </div>
           </div>
 
           <div className="bg-slate-50 rounded-lg p-4">
             <div className="flex items-center justify-between mb-2">
-              <span className="text-slate-600">Active Chatbots</span>
-              <Zap className="w-4 h-4 text-blue-500" />
+              <span className="text-slate-600">Messages This Month</span>
+              <TrendingUp className="w-4 h-4 text-green-500" />
             </div>
             <div className="flex items-end space-x-2">
-              <span className="text-2xl font-bold text-slate-800">{monthlyUsage.chatbots}</span>
-              <span className="text-slate-500">/ {currentPlanData?.limits.chatbots}</span>
+              <span className="text-2xl font-bold text-slate-800">{stats.messagesThisMonth.toLocaleString()}</span>
+              <span className="text-slate-500">/ {typeof currentPlanData?.limits.messages === 'number' ? currentPlanData.limits.messages.toLocaleString() : currentPlanData?.limits.messages}</span>
             </div>
             <div className="w-full bg-slate-200 rounded-full h-2 mt-2">
               <div 
-                className="bg-blue-500 h-2 rounded-full transition-all"
-                style={{ width: `${(monthlyUsage.chatbots / (currentPlanData?.limits.chatbots as number)) * 100}%` }}
+                className="bg-green-500 h-2 rounded-full transition-all"
+                style={{ 
+                  width: `${Math.min((stats.messagesThisMonth / (currentPlanData?.limits.messages as number)) * 100, 100)}%` 
+                }}
               ></div>
             </div>
           </div>
@@ -195,16 +285,35 @@ const Billing: React.FC = () => {
           <div className="bg-slate-50 rounded-lg p-4">
             <div className="flex items-center justify-between mb-2">
               <span className="text-slate-600">Documents</span>
-              <Star className="w-4 h-4 text-purple-500" />
+              <FileText className="w-4 h-4 text-purple-500" />
             </div>
             <div className="flex items-end space-x-2">
-              <span className="text-2xl font-bold text-slate-800">{monthlyUsage.documents}</span>
+              <span className="text-2xl font-bold text-slate-800">{stats.totalDocuments}</span>
               <span className="text-slate-500">/ {currentPlanData?.limits.documents}</span>
             </div>
             <div className="w-full bg-slate-200 rounded-full h-2 mt-2">
               <div 
                 className="bg-purple-500 h-2 rounded-full transition-all"
-                style={{ width: `${(monthlyUsage.documents / (currentPlanData?.limits.documents as number)) * 100}%` }}
+                style={{ 
+                  width: `${Math.min((stats.totalDocuments / (currentPlanData?.limits.documents as number)) * 100, 100)}%` 
+                }}
+              ></div>
+            </div>
+          </div>
+
+          <div className="bg-slate-50 rounded-lg p-4">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-slate-600">Total Conversations</span>
+              <Star className="w-4 h-4 text-orange-500" />
+            </div>
+            <div className="flex items-end space-x-2">
+              <span className="text-2xl font-bold text-slate-800">{stats.totalConversations}</span>
+              <span className="text-slate-500">/ ∞</span>
+            </div>
+            <div className="w-full bg-slate-200 rounded-full h-2 mt-2">
+              <div 
+                className="bg-orange-500 h-2 rounded-full transition-all"
+                style={{ width: '25%' }}
               ></div>
             </div>
           </div>

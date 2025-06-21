@@ -1,89 +1,63 @@
-import { OpenAI } from 'openai';
+import OpenAI from 'openai';
 
 // Initialize OpenAI client
-const openai = new OpenAI({
-  apiKey: import.meta.env.VITE_OPENAI_API_KEY,
-  dangerouslyAllowBrowser: true,
-});
+export const openai = import.meta.env.VITE_OPENAI_API_KEY 
+  ? new OpenAI({
+      apiKey: import.meta.env.VITE_OPENAI_API_KEY,
+      dangerouslyAllowBrowser: true,
+    })
+  : null;
 
 export interface ChatMessage {
-  role: 'system' | 'user' | 'assistant';
+  role: 'user' | 'assistant' | 'system';
   content: string;
 }
 
 export interface ChatResponse {
   message: string;
   sources?: string[];
-  error?: string;
 }
 
 export const generateChatResponse = async (
   messages: ChatMessage[],
   context?: string
 ): Promise<ChatResponse> => {
-  try {
-    if (!import.meta.env.VITE_OPENAI_API_KEY) {
-      throw new Error('OpenAI API key not configured');
-    }
+  if (!openai) {
+    // Return a demo response when OpenAI is not configured
+    return {
+      message: "I'm currently in demo mode. To enable full AI capabilities, please configure your OpenAI API key.",
+      sources: context ? ['Knowledge Base'] : undefined
+    };
+  }
 
-    // Prepare messages with context if available
+  try {
     const systemMessage: ChatMessage = {
       role: 'system',
-      content: context 
-        ? `You are a helpful AI assistant. Use the following context to answer questions accurately and helpfully. If the context doesn't contain relevant information, you can use your general knowledge but mention that the information isn't from the provided documents.
-
-Context:
-${context}
-
-Instructions:
-- Answer based on the context when possible
-- Be helpful and conversational
-- If you don't know something, say so
-- Keep responses concise but informative`
-        : 'You are a helpful AI assistant. Answer questions accurately and helpfully.'
+      content: `You are a helpful AI assistant. ${
+        context 
+          ? `Use the following context to answer questions when relevant:\n\n${context}\n\nIf the context doesn't contain relevant information, use your general knowledge.`
+          : 'Answer questions using your general knowledge.'
+      }`
     };
 
-    const chatMessages = [systemMessage, ...messages];
-
-    console.log('🤖 Generating chat response with OpenAI...');
-    
     const response = await openai.chat.completions.create({
       model: 'gpt-3.5-turbo',
-      messages: chatMessages,
+      messages: [systemMessage, ...messages],
       max_tokens: 500,
       temperature: 0.7,
     });
 
     const message = response.choices[0]?.message?.content || 'I apologize, but I was unable to generate a response.';
-    
-    console.log('✅ Chat response generated successfully');
-    
+
     return {
       message,
       sources: context ? ['Knowledge Base'] : undefined
     };
   } catch (error) {
-    console.error('❌ Error generating chat response:', error);
-    
-    if (error instanceof Error) {
-      if (error.message.includes('API key')) {
-        return {
-          message: 'I apologize, but the AI service is not properly configured. Please contact support.',
-          error: 'API key not configured'
-        };
-      } else if (error.message.includes('quota') || error.message.includes('billing')) {
-        return {
-          message: 'I apologize, but the AI service is temporarily unavailable due to quota limits. Please try again later.',
-          error: 'Quota exceeded'
-        };
-      }
-    }
-    
+    console.error('OpenAI API error:', error);
     return {
-      message: 'I apologize, but I encountered an error while processing your request. Please try again.',
-      error: error instanceof Error ? error.message : 'Unknown error'
+      message: "I'm experiencing some technical difficulties. Please try again later.",
+      sources: undefined
     };
   }
 };
-
-export { openai };

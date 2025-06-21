@@ -18,7 +18,8 @@ export const useChatbots = () => {
       setLoading(true);
       setError(null);
       
-      const { data, error } = await supabase
+      // Get chatbots with conversation and message counts
+      const { data: chatbotsData, error: chatbotsError } = await supabase
         .from('chatbots')
         .select(`
           *,
@@ -31,21 +32,51 @@ export const useChatbots = () => {
         .eq('user_id', user.id)
         .order('created_at', { ascending: false });
 
-      if (error) throw error;
+      if (chatbotsError) throw chatbotsError;
+
+      // Get conversation counts for each chatbot
+      const chatbotIds = chatbotsData?.map(bot => bot.id) || [];
+      
+      const { data: conversationCounts, error: convError } = await supabase
+        .from('conversations')
+        .select('chatbot_id')
+        .in('chatbot_id', chatbotIds);
+
+      if (convError) throw convError;
+
+      // Get message counts for this month
+      const startOfMonth = new Date();
+      startOfMonth.setDate(1);
+      startOfMonth.setHours(0, 0, 0, 0);
+
+      const { data: messageCounts, error: msgError } = await supabase
+        .from('messages')
+        .select('conversation_id, conversations!inner(chatbot_id)')
+        .gte('created_at', startOfMonth.toISOString());
+
+      if (msgError) throw msgError;
+
+      // Calculate response times (simplified - using average of 0.8s)
+      const avgResponseTime = 0.8;
 
       // Transform data to match our interface
-      const transformedData = (data || []).map(bot => ({
-        ...bot,
-        conversations_count: 0, // Placeholder
-        messages_this_month: Math.floor(Math.random() * 5000), // Placeholder
-        response_time: '0.8s', // Placeholder
-        configuration: bot.configuration || {
-          primaryColor: '#2563eb',
-          position: 'bottom-right',
-          welcomeMessage: 'Hello! How can I help you today?',
-          personality: 'helpful',
-        },
-      }));
+      const transformedData = (chatbotsData || []).map(bot => {
+        const conversationCount = conversationCounts?.filter(c => c.chatbot_id === bot.id).length || 0;
+        const messageCount = messageCounts?.filter((m: any) => m.conversations?.chatbot_id === bot.id).length || 0;
+
+        return {
+          ...bot,
+          conversations_count: conversationCount,
+          messages_this_month: messageCount,
+          response_time: `${avgResponseTime}s`,
+          configuration: bot.configuration || {
+            primaryColor: '#2563eb',
+            position: 'bottom-right',
+            welcomeMessage: 'Hello! How can I help you today?',
+            personality: 'helpful',
+          },
+        };
+      });
 
       setChatbots(transformedData);
     } catch (err) {
@@ -134,7 +165,7 @@ export const useChatbots = () => {
 
   useEffect(() => {
     fetchChatbots();
-  }, [user?.id]); // Only depend on user.id to avoid unnecessary re-fetches
+  }, [user?.id]);
 
   return {
     chatbots,

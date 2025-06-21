@@ -36,17 +36,6 @@ interface ExtendedMessage {
   attachments?: FileAttachment[];
 }
 
-interface UserInteraction {
-  id: string;
-  email?: string;
-  name?: string;
-  phone?: string;
-  sentiment: 'positive' | 'neutral' | 'negative';
-  reaction: 'good' | 'neutral' | 'worse';
-  conversation_history: string[];
-  created_at: Date;
-}
-
 const ChatbotPreview: React.FC<ChatbotPreviewProps> = ({ visible, onClose, chatbot: propChatbot, embedded = false }) => {
   // Safely use context - it might not be available in embedded mode
   let selectedBot = null;
@@ -178,7 +167,7 @@ const ChatbotPreview: React.FC<ChatbotPreviewProps> = ({ visible, onClose, chatb
     try {
       const recentMessages = conversationHistory.slice(-4).join('\n');
       
-      const response = await openai.chat.completions.create({
+      const response = await openai?.chat.completions.create({
         model: 'gpt-3.5-turbo',
         messages: [
           {
@@ -194,7 +183,7 @@ const ChatbotPreview: React.FC<ChatbotPreviewProps> = ({ visible, onClose, chatb
         temperature: 0.1,
       });
 
-      const sentiment = response.choices[0]?.message?.content?.toLowerCase().trim() as 'positive' | 'neutral' | 'negative';
+      const sentiment = response?.choices[0]?.message?.content?.toLowerCase().trim() as 'positive' | 'neutral' | 'negative';
       
       if (sentiment === 'negative') {
         setShowUserInfoForm(true);
@@ -257,8 +246,8 @@ const ChatbotPreview: React.FC<ChatbotPreviewProps> = ({ visible, onClose, chatb
         reader.readAsDataURL(file);
       });
 
-      const response = await openai.chat.completions.create({
-        model: 'gpt-4.1-mini',
+      const response = await openai?.chat.completions.create({
+        model: 'gpt-4o-mini',
         messages: [
           {
             role: 'user',
@@ -279,7 +268,7 @@ const ChatbotPreview: React.FC<ChatbotPreviewProps> = ({ visible, onClose, chatb
         max_tokens: 1000
       });
 
-      return response.choices[0]?.message?.content || '';
+      return response?.choices[0]?.message?.content || '';
     } catch (error) {
       console.error('Image text extraction failed:', error);
       throw new Error('Failed to extract text from image');
