@@ -174,6 +174,7 @@ const ChatbotEmbed: React.FC = () => {
  // Render embedded chatbot - ALWAYS show the widget
 // Render embedded chatbot - ALWAYS show the widget
 // Render embedded chatbot - ALWAYS show the widget
+// Render embedded chatbot - ALWAYS show the widget
 if (isEmbedded) {
   const { position = 'bottom-right', size = 'normal' } = chatbot.configuration || {};
   const sizeClasses = {
@@ -188,19 +189,20 @@ if (isEmbedded) {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center p-4" style={{ background: 'transparent' }}>
-      <ChatbotPreview
-        visible={true}
-        onClose={() => {}}
-        chatbot={chatbot}
-        embedded={true}
-        positionClass={positionStyles[position]}
-        sizeClass={sizeClasses[size]}
-      />
+    <div className="fixed inset-0 z-60 flex items-end justify-center p-4 pointer-events-none">
+      <div className={`fixed ${sizeClasses[size]} h-full ${positionStyles[position]} z-60 pointer-events-auto`}>
+        <ChatbotPreview
+          visible={true}
+          onClose={() => {}}
+          chatbot={chatbot}
+          embedded={true}
+          positionClass={positionStyles[position]}
+          sizeClass={sizeClasses[size]}
+        />
+      </div>
     </div>
   );
 }
-
   // Render full-page chatbot
   return (
     <div className="min-h-screen bg-slate-50">
