@@ -1,201 +1,461 @@
 import { useState, useEffect } from 'react';
+import { useDocuments } from './useDocuments';
+import { generateChatResponse, ChatMessage } from '../lib/openai';
+import { analyzeSentiment, SentimentResult } from '../lib/sentimentAnalysis';
+import { Chatbot } from '../lib/supabase';
 import { supabase } from '../lib/supabase';
-import { useAuth } from '../contexts/AuthContext';
 
-export interface ChatbotDomain {
+export interface ChatbotMessage {
   id: string;
-  chatbot_id: string;
-  domain: string;
-  token: string;
-  created_at: string;
-  updated_at: string;
-  is_active: boolean;
+  text: string;
+  sender: 'user' | 'bot';
+  timestamp: Date;
+  sources?: string[];
 }
 
-export const useChatbotDomains = (chatbotId?: string) => {
-  const [domains, setDomains] = useState<ChatbotDomain[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const { user } = useAuth();
+export const useChatbot = (chatbot: Chatbot | null) => {
+  const [messages, setMessages] = useState<ChatbotMessage[]>([]);
+  const [isTyping, setIsTyping] = useState(false);
+  const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
+  const [sentimentHistory, setSentimentHistory] = useState<SentimentResult[]>([]);
+  const [isEscalated, setIsEscalated] = useState(false);
+  const { fetchSimilarChunks } = useDocuments();
 
-  const fetchDomains = async () => {
-    if (!user || !chatbotId) {
-      setLoading(false);
-      return;
-    }
+  // Helper function to get user's IP address and user agent
+  const getUserInfo = () => {
+    const userAgent = navigator.userAgent;
+    // Note: Getting real IP requires a service call, for now we'll use a placeholder
+    return {
+      userAgent,
+      ipAddress: null // Will be populated by server-side logic if needed
+    };
+  };
+
+  const sendMessage = async (userMessage: string): Promise<void> => {
+    if (!chatbot) return;
+
+    // Add user message to UI immediately
+    const userChatMessage: ChatbotMessage = {
+      id: `user-${Date.now()}`,
+      text: userMessage,
+      sender: 'user',
+      timestamp: new Date(),
+    };
+
+    setMessages(prev => [...prev, userChatMessage]);
+    setIsTyping(true);
 
     try {
-      setLoading(true);
-      setError(null);
-
-      // First verify the chatbot belongs to the user
-      const { data: chatbot, error: chatbotError } = await supabase
-        .from('chatbots')
-        .select('id')
-        .eq('id', chatbotId)
-        .eq('user_id', user.id)
-        .single();
-
-      if (chatbotError || !chatbot) {
-        throw new Error('Chatbot not found or access denied');
+      // Create session ID if it doesn't exist
+      let sessionId = currentSessionId;
+      if (!sessionId) {
+        sessionId = `session_${Date.now()}_${Math.random().toString(36).substring(2)}`;
+        setCurrentSessionId(sessionId);
+        console.log('🔄 Created new session:', sessionId);
       }
 
-      const { data, error } = await supabase
-        .from('chatbot_domains')
-        .select('*')
-        .eq('chatbot_id', chatbotId)
-        .order('created_at', { ascending: false });
+      // Get user info for tracking
+      const userInfo = getUserInfo();
 
-      if (error) throw error;
-      setDomains(data || []);
-    } catch (err) {
-      console.error('Error fetching domains:', err);
-      setError(err instanceof Error ? err.message : 'Failed to fetch domains');
-    } finally {
-      setLoading(false);
-    }
-  };
+      // Store user message using session-based approach with user info
+      console.log('💾 Storing user message with session ID...');
+      const { data: userMessageData, error: userMessageError } = await supabase
+        .rpc('add_session_message', {
+          chatbot_id_param: chatbot.id,
+          session_id_param: sessionId,
+          content_param: userMessage,
+          role_param: 'user',
+          ip_address_param: userInfo.ipAddress,
+          user_agent_param: userInfo.userAgent
+        });
 
-  const addDomain = async (domain: string) => {
-    if (!user || !chatbotId) throw new Error('User not authenticated or chatbot not selected');
-
-    try {
-      // Generate a unique token
-      const token = `cbt_${Math.random().toString(36).substring(2, 15)}${Math.random().toString(36).substring(2, 15)}`;
-
-      // Clean domain (remove protocol, www, trailing slash)
-      const cleanDomain = domain
-        .replace(/^https?:\/\//, '')
-        .replace(/^www\./, '')
-        .replace(/\/$/, '')
-        .toLowerCase();
-
-      // Validate domain format
-      const domainRegex = /^[a-zA-Z0-9][a-zA-Z0-9-]{0,61}[a-zA-Z0-9](?:\.[a-zA-Z]{2,})+$/;
-      if (!domainRegex.test(cleanDomain)) {
-        throw new Error('Invalid domain format');
+      if (userMessageError) {
+        console.error('❌ Failed to store user message:', userMessageError);
+        throw new Error('Failed to store user message');
       }
 
-      // Check if domain already exists for this chatbot
-      const { data: existing } = await supabase
-        .from('chatbot_domains')
-        .select('id')
-        .eq('chatbot_id', chatbotId)
-        .eq('domain', cleanDomain)
-        .maybeSingle();
+      console.log('✅ User message stored successfully');
 
-      if (existing) {
-        throw new Error('Domain already exists for this chatbot');
+      // Analyze sentiment of the last 5 messages (including current one) - only if not escalated
+      const recentMessages = [...messages.slice(-4), userChatMessage]
+        .filter(msg => msg.sender === 'user')
+        .map(msg => msg.text);
+
+      if (recentMessages.length > 0 && !isEscalated) {
+        console.log('🔍 Analyzing sentiment...');
+        const sentimentResult = await analyzeSentiment(recentMessages);
+        setSentimentHistory(prev => [...prev.slice(-4), sentimentResult]);
+
+        console.log('📊 Sentiment analysis result:', sentimentResult);
+
+        // Check if escalation is needed
+        if (sentimentResult.shouldEscalate) {
+          console.log('🚨 User seems frustrated, but continuing with AI assistance...');
+          setIsEscalated(true);
+          
+          // Add empathy message
+          const empathyMessage: ChatbotMessage = {
+            id: `empathy-${Date.now()}`,
+            text: "I understand this might be frustrating. Let me do my best to help you with this issue.",
+            sender: 'bot',
+            timestamp: new Date(),
+          };
+          
+          setMessages(prev => [...prev, empathyMessage]);
+        }
       }
 
-      const { data, error } = await supabase
-        .from('chatbot_domains')
-        .insert([
-          {
-            chatbot_id: chatbotId,
-            domain: cleanDomain,
-            token: token,
-            is_active: true,
-          },
-        ])
-        .select()
-        .single();
+      let context = '';
+      let sources: string[] = [];
 
-      if (error) throw error;
+      // If chatbot has a knowledge base, search for relevant chunks
+      if (chatbot.knowledge_base_id) {
+        console.log('🔍 Searching knowledge base for relevant content...');
+        // Pass chatbot ID for public access in embedded mode
+        const similarChunks = await fetchSimilarChunks(userMessage, 5, chatbot.id);
+        
+        if (similarChunks.length > 0) {
+          // Create comprehensive context from chunks
+          context = similarChunks
+            .map((chunk, index) => `[Source ${index + 1}]: ${chunk.chunk_text}`)
+            .join('\n\n');
+          
+          sources = similarChunks.map((chunk, index) => `Knowledge Base - Chunk ${index + 1}`);
+          console.log(`✅ Found ${similarChunks.length} relevant chunks, context length: ${context.length} characters`);
+          console.log('📄 Context preview:', context.substring(0, 200) + '...');
+        } else {
+          console.log('ℹ️ No relevant chunks found in knowledge base');
+        }
+      }
 
-      setDomains(prev => [data, ...prev]);
-      return data;
-    } catch (err) {
-      console.error('Error adding domain:', err);
-      throw new Error(err instanceof Error ? err.message : 'Failed to add domain');
-    }
-  };
+      // Prepare chat history for context
+      const chatHistory: ChatMessage[] = messages
+        .slice(-5) // Last 5 messages for context
+        .map(msg => ({
+          role: msg.sender === 'user' ? 'user' : 'assistant',
+          content: msg.text
+        }));
 
-  const updateDomain = async (domainId: string, updates: Partial<ChatbotDomain>) => {
-    try {
-      const { data, error } = await supabase
-        .from('chatbot_domains')
-        .update({
-          ...updates,
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', domainId)
-        .select()
-        .single();
+      // Add current user message
+      chatHistory.push({
+        role: 'user',
+        content: userMessage
+      });
 
-      if (error) throw error;
-
-      setDomains(prev => prev.map(domain => 
-        domain.id === domainId ? { ...domain, ...data } : domain
-      ));
-      return data;
-    } catch (err) {
-      console.error('Error updating domain:', err);
-      throw new Error(err instanceof Error ? err.message : 'Failed to update domain');
-    }
-  };
-
-  const deleteDomain = async (domainId: string) => {
-    try {
-      const { error } = await supabase
-        .from('chatbot_domains')
-        .delete()
-        .eq('id', domainId);
-
-      if (error) throw error;
-
-      setDomains(prev => prev.filter(domain => domain.id !== domainId));
-    } catch (err) {
-      console.error('Error deleting domain:', err);
-      throw new Error(err instanceof Error ? err.message : 'Failed to delete domain');
-    }
-  };
-
-  const regenerateToken = async (domainId: string) => {
-    try {
-      const newToken = `cbt_${Math.random().toString(36).substring(2, 15)}${Math.random().toString(36).substring(2, 15)}`;
+      // Generate response using OpenAI with enhanced context handling
+      console.log('🤖 Generating AI response with context...');
+      console.log('📊 Context available:', !!context);
+      console.log('📊 Context length:', context.length);
       
-      return await updateDomain(domainId, { token: newToken });
-    } catch (err) {
-      console.error('Error regenerating token:', err);
-      throw new Error(err instanceof Error ? err.message : 'Failed to regenerate token');
-    }
-  };
+      const response = await generateChatResponse(chatHistory, context, chatbot.configuration?.personality);
 
-  const validateDomainAndToken = async (domain: string, token: string) => {
-    try {
-      const { data, error } = await supabase
-        .from('chatbot_domains')
-        .select('*')
-        .eq('domain', domain)
-        .eq('token', token)
-        .eq('is_active', true)
-        .single();
+      // Add bot response to UI
+      const botMessage: ChatbotMessage = {
+        id: `bot-${Date.now()}`,
+        text: response.message,
+        sender: 'bot',
+        timestamp: new Date(),
+        sources: response.sources || (sources.length > 0 ? sources : undefined),
+      };
 
-      if (error || !data) {
-        return { isValid: false, domain: null };
+      setMessages(prev => [...prev, botMessage]);
+
+      // Store bot message using session-based approach
+      console.log('💾 Storing bot message with session ID...');
+      const { data: botMessageData, error: botMessageError } = await supabase
+        .rpc('add_session_message', {
+          chatbot_id_param: chatbot.id,
+          session_id_param: sessionId,
+          content_param: response.message,
+          role_param: 'assistant',
+          ip_address_param: userInfo.ipAddress,
+          user_agent_param: userInfo.userAgent
+        });
+
+      if (botMessageError) {
+        console.error('❌ Failed to store bot message:', botMessageError);
+        // Don't throw error here as the user already sees the response
+      } else {
+        console.log('✅ Bot response stored successfully');
       }
 
-      return { isValid: true, domain: data };
-    } catch (err) {
-      console.error('Error validating domain and token:', err);
-      return { isValid: false, domain: null };
+    } catch (error) {
+      console.error('❌ Error generating bot response:', error);
+      
+      // Add error message
+      const errorMessage: ChatbotMessage = {
+        id: `bot-error-${Date.now()}`,
+        text: "I apologize, but I'm experiencing some technical difficulties. Please try again later.",
+        sender: 'bot',
+        timestamp: new Date(),
+      };
+
+      setMessages(prev => [...prev, errorMessage]);
+    } finally {
+      setIsTyping(false);
     }
   };
 
-  useEffect(() => {
-    fetchDomains();
-  }, [user?.id, chatbotId]);
+  const initializeChat = () => {
+    if (!chatbot) return;
+
+    const welcomeMessage: ChatbotMessage = {
+      id: 'welcome',
+      text: chatbot.configuration?.welcomeMessage || "Hello! I'm your AI assistant. How can I help you today?",
+      sender: 'bot',
+      timestamp: new Date(),
+    };
+
+    setMessages([welcomeMessage]);
+    setCurrentSessionId(null); // Reset session
+    setSentimentHistory([]);
+    setIsEscalated(false);
+  };
+
+  const clearChat = () => {
+    setMessages([]);
+    setCurrentSessionId(null);
+    setSentimentHistory([]);
+    setIsEscalated(false);
+  };
 
   return {
-    domains,
-    loading,
-    error,
-    addDomain,
-    updateDomain,
-    deleteDomain,
-    regenerateToken,
-    validateDomainAndToken,
-    refetch: fetchDomains,
+    messages,
+    isTyping,
+    sentimentHistory,
+    isEscalated,
+    sendMessage,
+    initializeChat,
+    clearChat,
+  };
+};import { useState, useEffect } from 'react';
+import { useDocuments } from './useDocuments';
+import { generateChatResponse, ChatMessage } from '../lib/openai';
+import { analyzeSentiment, SentimentResult } from '../lib/sentimentAnalysis';
+import { Chatbot } from '../lib/supabase';
+import { supabase } from '../lib/supabase';
+
+export interface ChatbotMessage {
+  id: string;
+  text: string;
+  sender: 'user' | 'bot';
+  timestamp: Date;
+  sources?: string[];
+}
+
+export const useChatbot = (chatbot: Chatbot | null) => {
+  const [messages, setMessages] = useState<ChatbotMessage[]>([]);
+  const [isTyping, setIsTyping] = useState(false);
+  const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
+  const [sentimentHistory, setSentimentHistory] = useState<SentimentResult[]>([]);
+  const [isEscalated, setIsEscalated] = useState(false);
+  const { fetchSimilarChunks } = useDocuments();
+
+  // Helper function to get user's IP address and user agent
+  const getUserInfo = () => {
+    const userAgent = navigator.userAgent;
+    // Note: Getting real IP requires a service call, for now we'll use a placeholder
+    return {
+      userAgent,
+      ipAddress: null // Will be populated by server-side logic if needed
+    };
+  };
+
+  const sendMessage = async (userMessage: string): Promise<void> => {
+    if (!chatbot) return;
+
+    // Add user message to UI immediately
+    const userChatMessage: ChatbotMessage = {
+      id: `user-${Date.now()}`,
+      text: userMessage,
+      sender: 'user',
+      timestamp: new Date(),
+    };
+
+    setMessages(prev => [...prev, userChatMessage]);
+    setIsTyping(true);
+
+    try {
+      // Create session ID if it doesn't exist
+      let sessionId = currentSessionId;
+      if (!sessionId) {
+        sessionId = `session_${Date.now()}_${Math.random().toString(36).substring(2)}`;
+        setCurrentSessionId(sessionId);
+        console.log('🔄 Created new session:', sessionId);
+      }
+
+      // Get user info for tracking
+      const userInfo = getUserInfo();
+
+      // Store user message using session-based approach with user info
+      console.log('💾 Storing user message with session ID...');
+      const { data: userMessageData, error: userMessageError } = await supabase
+        .rpc('add_session_message', {
+          chatbot_id_param: chatbot.id,
+          session_id_param: sessionId,
+          content_param: userMessage,
+          role_param: 'user',
+          ip_address_param: userInfo.ipAddress,
+          user_agent_param: userInfo.userAgent
+        });
+
+      if (userMessageError) {
+        console.error('❌ Failed to store user message:', userMessageError);
+        throw new Error('Failed to store user message');
+      }
+
+      console.log('✅ User message stored successfully');
+
+      // Analyze sentiment of the last 5 messages (including current one) - only if not escalated
+      const recentMessages = [...messages.slice(-4), userChatMessage]
+        .filter(msg => msg.sender === 'user')
+        .map(msg => msg.text);
+
+      if (recentMessages.length > 0 && !isEscalated) {
+        console.log('🔍 Analyzing sentiment...');
+        const sentimentResult = await analyzeSentiment(recentMessages);
+        setSentimentHistory(prev => [...prev.slice(-4), sentimentResult]);
+
+        console.log('📊 Sentiment analysis result:', sentimentResult);
+
+        // Check if escalation is needed
+        if (sentimentResult.shouldEscalate) {
+          console.log('🚨 User seems frustrated, but continuing with AI assistance...');
+          setIsEscalated(true);
+          
+          // Add empathy message
+          const empathyMessage: ChatbotMessage = {
+            id: `empathy-${Date.now()}`,
+            text: "I understand this might be frustrating. Let me do my best to help you with this issue.",
+            sender: 'bot',
+            timestamp: new Date(),
+          };
+          
+          setMessages(prev => [...prev, empathyMessage]);
+        }
+      }
+
+      let context = '';
+      let sources: string[] = [];
+
+      // If chatbot has a knowledge base, search for relevant chunks
+      if (chatbot.knowledge_base_id) {
+        console.log('🔍 Searching knowledge base for relevant content...');
+        // Pass chatbot ID for public access in embedded mode
+        const similarChunks = await fetchSimilarChunks(userMessage, 5, chatbot.id);
+        
+        if (similarChunks.length > 0) {
+          // Create comprehensive context from chunks
+          context = similarChunks
+            .map((chunk, index) => `[Source ${index + 1}]: ${chunk.chunk_text}`)
+            .join('\n\n');
+          
+          sources = similarChunks.map((chunk, index) => `Knowledge Base - Chunk ${index + 1}`);
+          console.log(`✅ Found ${similarChunks.length} relevant chunks, context length: ${context.length} characters`);
+          console.log('📄 Context preview:', context.substring(0, 200) + '...');
+        } else {
+          console.log('ℹ️ No relevant chunks found in knowledge base');
+        }
+      }
+
+      // Prepare chat history for context
+      const chatHistory: ChatMessage[] = messages
+        .slice(-5) // Last 5 messages for context
+        .map(msg => ({
+          role: msg.sender === 'user' ? 'user' : 'assistant',
+          content: msg.text
+        }));
+
+      // Add current user message
+      chatHistory.push({
+        role: 'user',
+        content: userMessage
+      });
+
+      // Generate response using OpenAI with enhanced context handling
+      console.log('🤖 Generating AI response with context...');
+      console.log('📊 Context available:', !!context);
+      console.log('📊 Context length:', context.length);
+      
+      const response = await generateChatResponse(chatHistory, context, chatbot.configuration?.personality);
+
+      // Add bot response to UI
+      const botMessage: ChatbotMessage = {
+        id: `bot-${Date.now()}`,
+        text: response.message,
+        sender: 'bot',
+        timestamp: new Date(),
+        sources: response.sources || (sources.length > 0 ? sources : undefined),
+      };
+
+      setMessages(prev => [...prev, botMessage]);
+
+      // Store bot message using session-based approach
+      console.log('💾 Storing bot message with session ID...');
+      const { data: botMessageData, error: botMessageError } = await supabase
+        .rpc('add_session_message', {
+          chatbot_id_param: chatbot.id,
+          session_id_param: sessionId,
+          content_param: response.message,
+          role_param: 'assistant',
+          ip_address_param: userInfo.ipAddress,
+          user_agent_param: userInfo.userAgent
+        });
+
+      if (botMessageError) {
+        console.error('❌ Failed to store bot message:', botMessageError);
+        // Don't throw error here as the user already sees the response
+      } else {
+        console.log('✅ Bot response stored successfully');
+      }
+
+    } catch (error) {
+      console.error('❌ Error generating bot response:', error);
+      
+      // Add error message
+      const errorMessage: ChatbotMessage = {
+        id: `bot-error-${Date.now()}`,
+        text: "I apologize, but I'm experiencing some technical difficulties. Please try again later.",
+        sender: 'bot',
+        timestamp: new Date(),
+      };
+
+      setMessages(prev => [...prev, errorMessage]);
+    } finally {
+      setIsTyping(false);
+    }
+  };
+
+  const initializeChat = () => {
+    if (!chatbot) return;
+
+    const welcomeMessage: ChatbotMessage = {
+      id: 'welcome',
+      text: chatbot.configuration?.welcomeMessage || "Hello! I'm your AI assistant. How can I help you today?",
+      sender: 'bot',
+      timestamp: new Date(),
+    };
+
+    setMessages([welcomeMessage]);
+    setCurrentSessionId(null); // Reset session
+    setSentimentHistory([]);
+    setIsEscalated(false);
+  };
+
+  const clearChat = () => {
+    setMessages([]);
+    setCurrentSessionId(null);
+    setSentimentHistory([]);
+    setIsEscalated(false);
+  };
+
+  return {
+    messages,
+    isTyping,
+    sentimentHistory,
+    isEscalated,
+    sendMessage,
+    initializeChat,
+    clearChat,
   };
 };
