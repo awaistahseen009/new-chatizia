@@ -21,6 +21,7 @@ import Analytics from './pages/Analytics';
 import Settings from './pages/Settings';
 import Billing from './pages/Billing';
 import ChatbotEmbed from './pages/ChatbotEmbed';
+import AdminDashboard from './pages/AdminDashboard';
 
 const AppRoutes: React.FC = () => {
   const { user, loading } = useAuth();
@@ -29,6 +30,9 @@ const AppRoutes: React.FC = () => {
   if (loading && user === undefined) {
     return null;
   }
+
+  // Check if user is admin
+  const isAdmin = user?.email === 'admin@chatizia.com' || user?.subscription_status === 'admin';
 
   return (
     <Routes>
@@ -58,6 +62,17 @@ const AppRoutes: React.FC = () => {
           </ChatbotProvider>
         } 
       />
+
+      {/* Admin Route */}
+      <Route path="/admin" element={
+        <ProtectedRoute>
+          {isAdmin ? (
+            <AdminDashboard />
+          ) : (
+            <Navigate to="/dashboard" replace />
+          )}
+        </ProtectedRoute>
+      } />
 
       {/* Protected Routes */}
       <Route path="/dashboard" element={
