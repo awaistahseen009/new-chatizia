@@ -35,25 +35,23 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   }
 });
 
-// Test connection on initialization
-const testConnection = async () => {
+// Test connection function - can be called when needed
+export const testConnection = async () => {
   try {
     console.log('🔍 Testing Supabase connection...');
     const { data, error } = await supabase.from('users').select('count').limit(1);
     if (error) {
       console.error('❌ Supabase connection test failed:', error.message);
+      return false;
     } else {
       console.log('✅ Supabase connection test successful');
+      return true;
     }
   } catch (error) {
     console.error('❌ Supabase connection test error:', error);
+    return false;
   }
 };
-
-// Run connection test in development
-if (import.meta.env.DEV) {
-  testConnection();
-}
 
 // Database types matching your existing schema
 export interface User {
