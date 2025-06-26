@@ -443,33 +443,33 @@ System: You don't have permission to access the admin panel.</p>
 
             {/* Users Table */}
             <div className="bg-white rounded-lg border border-slate-200 overflow-hidden">
-              <div class(vars="overflow-x-auto">
-                <table className="w-full">
-                  <thead className="bg-slate-50">
-                    <tr>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">
-                        User
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">
-                        Subscription
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">
-                        Chatbots
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">
-                        Documents
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">
-                        Status
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">
-                        Joined
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">
-                        Actions
-                      </th>
-                    </tr>
-                  </thead>
+  <div className="overflow-x-auto">
+    <table className="w-full">
+      <thead className="bg-slate-50">
+        <tr>
+          <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">
+            User
+          </th>
+          <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">
+            Subscription
+          </th>
+          <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">
+            Chatbots
+          </th>
+          <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">
+            Documents
+          </th>
+          <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">
+            Status
+          </th>
+          <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">
+            Joined
+          </th>
+          <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">
+            Actions
+          </th>
+        </tr>
+      </thead>
                   <tbody className="divide-y divide-slate-200">
                     {filteredUsers.map((user) => (
                       <tr key={user.id} className="hover:bg-slate-50">
