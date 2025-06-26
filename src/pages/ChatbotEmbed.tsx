@@ -172,15 +172,37 @@ const ChatbotEmbed: React.FC = () => {
 
   // Render embedded chatbot - ALWAYS show the widget
  // Render embedded chatbot - ALWAYS show the widget
+// Render embedded chatbot - ALWAYS show the widget
 if (isEmbedded) {
+  const { position = 'bottom-right', size = 'normal' } = chatbot.configuration || {};
+  const sizeClasses = {
+    compact: 'w-64 h-80',
+    normal: 'w-80 h-96',
+    large: 'w-96 h-120',
+  };
+  const positionStyles = {
+    'bottom-right': 'bottom-6 right-6',
+    'bottom-left': 'bottom-6 left-6',
+    center: 'top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2',
+  };
+
   return (
-    <div className="w-full h-auto" style={{ background: 'transparent' }}>
-      <ChatbotPreview 
-        visible={true} 
-        onClose={() => {}} 
-        chatbot={chatbot}
-        embedded={true}
-      />
+    <div className="fixed z-50" style={{ background: 'transparent' }}>
+      <div
+        className={`chatbot-container ${sizeClasses[size]} ${positionStyles[position]} flex items-center justify-center`}
+        style={{
+          position: 'fixed',
+          background: 'transparent',
+          overflow: 'hidden',
+        }}
+      >
+        <ChatbotPreview
+          visible={true}
+          onClose={() => {}}
+          chatbot={chatbot}
+          embedded={true}
+        />
+      </div>
     </div>
   );
 }
