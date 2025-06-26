@@ -33,7 +33,7 @@ const AppRoutes: React.FC = () => {
 
   // Check if user is admin
   const isAdmin = user?.email === 'admin@chatizia.com' || user?.subscription_status === 'admin';
-  console.log(user.email)
+  console.log(user?.email)
   return (
     <Routes>
       {/* Landing Page */}
