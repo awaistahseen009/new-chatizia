@@ -787,13 +787,7 @@ if (embedded) {
                       >
                         <ImageIcon className="w-4 h-4" />
                       </button>
-                      <button
-                        className="p-2 text-slate-400 hover:text-slate-600 transition-colors"
-                        title="Attach file"
-                        disabled={isTyping || isProcessingImage}
-                      >
-                        <Paperclip className="w-4 h-4" />
-                      </button>
+                    
                       <button
                         onClick={handleSendMessage}
                         className="p-2 text-white rounded-lg transition-colors disabled:opacity-50"
