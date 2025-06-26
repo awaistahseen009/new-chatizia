@@ -61,7 +61,7 @@ const LandingPage: React.FC = () => {
           opacity: 1, 
           y: 0, 
           duration: 0.8, 
-          stagger: 0.1,
+          stagger: 0.1,
           scrollTrigger: {
             trigger: featuresRef.current,
             start: 'top 80%',
