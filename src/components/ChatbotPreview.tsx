@@ -328,13 +328,18 @@ const ChatbotPreview: React.FC<ChatbotPreviewProps> = ({ visible, onClose, chatb
   }
 
   let containerClasses = '';
-  if (embedded) {
-    containerClasses = `fixed z-60 ${sizeClass || sizeClasses[size]} h-full ${positionClass || positionClasses[position]}`;
-  } else {
-    containerClasses = isFullscreen
-      ? 'fixed inset-0 z-60'
-      : 'fixed right-6 top-20 bottom-6 w-80 z-60';
-  }
+if (embedded) {
+  const positionClasses = {
+    'bottom-right': 'fixed bottom-0 right-0 w-full max-w-[400px] h-[600px] z-50',
+    'bottom-left': 'fixed bottom-0 left-0 w-full max-w-[400px] h-[600px] z-50',
+    'center': 'fixed top-0 left-0 w-full h-full z-50'
+  };
+  containerClasses = positionClasses[position as keyof typeof positionClasses] || positionClasses['bottom-right'];
+} else {
+  containerClasses = isFullscreen 
+    ? "fixed inset-0 z-50" 
+    : "fixed right-6 top-20 bottom-6 w-80 z-50";
+}
 
   return (
     <div className={containerClasses}>
