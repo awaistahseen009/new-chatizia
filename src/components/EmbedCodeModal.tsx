@@ -102,7 +102,7 @@ const EmbedCodeModal: React.FC<EmbedCodeModalProps> = ({ isOpen, onClose, chatbo
                 </div>
                 
                 <div className="flex items-center justify-between mb-3">
-                  <p className="text-slate-600">Copy and paste this code before the closing </body> tag</p>
+                  <p className="text-slate-600">Copy and paste this code before the closing <code>&lt;/body&gt;</code> tag</p>
                   <button
                     onClick={handleCopy}
                     className="flex items-center space-x-2 px-3 py-2 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors"
@@ -144,7 +144,7 @@ const EmbedCodeModal: React.FC<EmbedCodeModalProps> = ({ isOpen, onClose, chatbo
                       2
                     </div>
                     <div>
-                      <p className="font-medium text-slate-800">Paste it before the closing </body> tag</p>
+                      <p className="font-medium text-slate-800">Paste it before the closing <code>&lt;/body&gt;</code> tag</p>
                       <p className="text-sm text-slate-600">Add the code to every page where you want the chatbot to appear</p>
                     </div>
                   </div>
