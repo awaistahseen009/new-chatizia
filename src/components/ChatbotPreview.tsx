@@ -27,13 +27,11 @@ interface ExtendedMessage {
 }
 
 const ChatbotPreview: React.FC<ChatbotPreviewProps> = ({ visible, onClose, chatbot: propChatbot, embedded = false }) => {
-  // Safely use context - it might not be available in embedded mode
   let selectedBot = null;
   try {
     const context = useChatbotContext();
     selectedBot = context?.selectedBot;
   } catch (error) {
-    // Context not available, which is fine for embedded mode
     console.log('ChatbotProvider context not available - using prop chatbot');
   }
 
@@ -53,18 +51,16 @@ const ChatbotPreview: React.FC<ChatbotPreviewProps> = ({ visible, onClose, chatb
   const [microphoneSupported, setMicrophoneSupported] = useState(true);
   const [isWidgetMode, setIsWidgetMode] = useState(embedded);
   const [isWidgetOpen, setIsWidgetOpen] = useState(false);
-  
+
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const recordingIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const audioRefs = useRef<Map<string, HTMLAudioElement>>(new Map());
 
-  // ElevenLabs configuration
   const ELEVENLABS_API_KEY = import.meta.env.VITE_ELEVENLABS_API_KEY;
   const OPENAI_API_KEY = import.meta.env.VITE_OPENAI_API_KEY;
   const VOICE_ID = '56AoDkrOh6qfVPDXZ7Pt';
 
-  // Auto-scroll to bottom when new messages arrive
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
@@ -73,41 +69,21 @@ const ChatbotPreview: React.FC<ChatbotPreviewProps> = ({ visible, onClose, chatb
     scrollToBottom();
   }, [messages]);
 
-  // Check microphone permissions and support
   useEffect(() => {
     const checkMicrophoneSupport = async () => {
-      try {
-        // Check if we're in a secure context (HTTPS or localhost)
-        if (!window.isSecureContext) {
-          console.log('⚠️ Microphone requires secure context (HTTPS)');
-          setMicrophoneSupported(false);
-          return;
-        }
-
-        // Check if getUserMedia is supported
-        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-          console.log('⚠️ getUserMedia not supported');
-          setMicrophoneSupported(false);
-          return;
-        }
-
-        // Check permissions policy
-        if ('permissions' in navigator) {
-          const permission = await navigator.permissions.query({ name: 'microphone' as PermissionName });
-          if (permission.state === 'denied') {
-            console.log('⚠️ Microphone permission denied');
-            setMicrophoneSupported(false);
-            return;
-          }
-        }
-
-        setMicrophoneSupported(true);
-      } catch (error) {
-        console.log('⚠️ Error checking microphone support:', error);
+      if (!window.isSecureContext || !navigator.mediaDevices?.getUserMedia) {
         setMicrophoneSupported(false);
+        return;
       }
+      if ('permissions' in navigator) {
+        const permission = await navigator.permissions.query({ name: 'microphone' as PermissionName });
+        if (permission.state === 'denied') {
+          setMicrophoneSupported(false);
+          return;
+        }
+      }
+      setMicrophoneSupported(true);
     };
-
     checkMicrophoneSupport();
   }, []);
 
@@ -117,7 +93,6 @@ const ChatbotPreview: React.FC<ChatbotPreviewProps> = ({ visible, onClose, chatb
     }
   }, [bot, visible]);
 
-  // Convert hook messages to extended messages
   useEffect(() => {
     const extendedMessages: ExtendedMessage[] = hookMessages.map(msg => ({
       id: msg.id,
@@ -129,7 +104,6 @@ const ChatbotPreview: React.FC<ChatbotPreviewProps> = ({ visible, onClose, chatb
     setMessages(extendedMessages);
   }, [hookMessages]);
 
-  // Auto-generate voice for bot responses in voice mode (but don't auto-play)
   useEffect(() => {
     if (replyMode === 'voice' && messages.length > 0) {
       const lastMessage = messages[messages.length - 1];
@@ -141,118 +115,52 @@ const ChatbotPreview: React.FC<ChatbotPreviewProps> = ({ visible, onClose, chatb
 
   const generateBotVoiceResponse = async (message: ExtendedMessage) => {
     if (!ELEVENLABS_API_KEY) {
-      console.warn('ElevenLabs API key not configured');
       setErrorMessage('Voice features unavailable: API key missing');
       return;
     }
-
     try {
       const response = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${VOICE_ID}`, {
         method: 'POST',
-        headers: {
-          'xi-api-key': ELEVENLABS_API_KEY,
-          'Content-Type': 'application/json',
-        },
+        headers: { 'xi-api-key': ELEVENLABS_API_KEY, 'Content-Type': 'application/json' },
         body: JSON.stringify({
           text: message.text,
           model_id: 'eleven_monolingual_v1',
-          voice_settings: {
-            stability: 0.5,
-            similarity_boost: 0.75,
-            style: 0.0,
-            use_speaker_boost: true
-          }
+          voice_settings: { stability: 0.5, similarity_boost: 0.75, style: 0.0, use_speaker_boost: true }
         }),
       });
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(`Text-to-speech failed: ${response.status} ${errorText}`);
-      }
-
+      if (!response.ok) throw new Error(`Text-to-speech failed: ${await response.text()}`);
       const audioBlob = await response.blob();
       const audioUrl = URL.createObjectURL(audioBlob);
-
-      // Update the message with voice data (but don't auto-play)
-      setMessages(prev => prev.map(msg => 
-        msg.id === message.id 
-          ? { ...msg, voice: { audioUrl, duration: 0 } }
-          : msg
-      ));
-
+      setMessages(prev => prev.map(msg => msg.id === message.id ? { ...msg, voice: { audioUrl, duration: 0 } } : msg));
     } catch (error) {
-      console.error('Failed to generate voice response:', error);
       setErrorMessage('Failed to generate bot voice response');
     }
   };
 
   const startRecording = async () => {
-    if (!OPENAI_API_KEY) {
-      setErrorMessage('Voice features require OpenAI API key in VITE_OPENAI_API_KEY');
+    if (!OPENAI_API_KEY || !microphoneSupported) {
+      setErrorMessage(!OPENAI_API_KEY ? 'Voice features require OpenAI API key' : 'Microphone not supported or permission denied');
       return;
     }
-
-    if (!microphoneSupported) {
-      setErrorMessage('Microphone not supported or permission denied. Voice features require HTTPS and microphone permissions.');
-      return;
-    }
-
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ 
-        audio: {
-          echoCancellation: true,
-          noiseSuppression: true,
-          sampleRate: 16000,
-        }
-      });
-      
-      const mediaRecorder = new MediaRecorder(stream, {
-        mimeType: 'audio/webm'
-      });
-      
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, sampleRate: 16000 } });
+      const mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
       mediaRecorderRef.current = mediaRecorder;
       const chunks: Blob[] = [];
-
-      mediaRecorder.ondataavailable = (e) => {
-        if (e.data.size > 0) {
-          chunks.push(e.data);
-        }
-      };
-
+      mediaRecorder.ondataavailable = (e) => chunks.push(e.data);
       mediaRecorder.onstop = async () => {
         const audioBlob = new Blob(chunks, { type: 'audio/webm' });
         stream.getTracks().forEach(track => track.stop());
-        
-        if (audioBlob.size > 0) {
-          console.log(`Audio Blob Size: ${audioBlob.size} bytes, Duration: ${recordingTime}s, Type: ${audioBlob.type}`);
-          await processVoiceMessage(audioBlob, recordingTime);
-        } else {
-          setErrorMessage('No audio data captured. Please try again.');
-        }
+        if (audioBlob.size > 0) await processVoiceMessage(audioBlob, recordingTime);
+        else setErrorMessage('No audio data captured');
       };
-
       mediaRecorder.start(100);
       setIsRecording(true);
       setRecordingTime(0);
       setErrorMessage(null);
-      
-      recordingIntervalRef.current = setInterval(() => {
-        setRecordingTime(prev => prev + 1);
-      }, 1000);
-
+      recordingIntervalRef.current = setInterval(() => setRecordingTime(prev => prev + 1), 1000);
     } catch (error) {
-      console.error('Failed to start recording:', error);
-      if (error instanceof Error) {
-        if (error.name === 'NotAllowedError') {
-          setErrorMessage('Microphone permission denied. Please allow microphone access and try again.');
-        } else if (error.name === 'NotFoundError') {
-          setErrorMessage('No microphone found. Please connect a microphone and try again.');
-        } else {
-          setErrorMessage('Failed to access microphone. Please check permissions and try again.');
-        }
-      } else {
-        setErrorMessage('Failed to access microphone. Please check permissions and try again.');
-      }
+      setErrorMessage((error as Error).name === 'NotAllowedError' ? 'Microphone permission denied' : 'Failed to access microphone');
       setMicrophoneSupported(false);
     }
   };
@@ -261,7 +169,6 @@ const ChatbotPreview: React.FC<ChatbotPreviewProps> = ({ visible, onClose, chatb
     if (mediaRecorderRef.current && isRecording) {
       mediaRecorderRef.current.stop();
       setIsRecording(false);
-      
       if (recordingIntervalRef.current) {
         clearInterval(recordingIntervalRef.current);
         recordingIntervalRef.current = null;
@@ -271,52 +178,22 @@ const ChatbotPreview: React.FC<ChatbotPreviewProps> = ({ visible, onClose, chatb
 
   const processVoiceMessage = async (audioBlob: Blob, durationSeconds: number) => {
     setIsProcessingVoice(true);
-    
     try {
-      console.log(`Sending audio: Size=${audioBlob.size} bytes, Type=${audioBlob.type}, Duration=${durationSeconds}s`);
-
-      if (!openai) {
-        throw new Error('OpenAI client not initialized. Please check your API key configuration.');
-      }
-
       const audioFile = new File([audioBlob], 'recording.webm', { type: 'audio/webm' });
-
       const transcription = await openai.audio.transcriptions.create({
         file: audioFile,
         model: 'whisper-1',
         language: 'en',
         response_format: 'text'
       });
-
-      console.log('Transcription response:', transcription);
-      
       const transcribedText = typeof transcription === 'string' ? transcription : transcription.text;
-
-      if (!transcribedText || transcribedText.trim().length === 0) {
-        throw new Error('No speech detected in the recording. Please speak clearly and try again.');
-      }
-
+      if (!transcribedText?.trim()) throw new Error('No speech detected');
       const audioUrl = URL.createObjectURL(audioBlob);
-
-      const userVoiceMessage: ExtendedMessage = {
-        id: `voice-${Date.now()}`,
-        text: transcribedText,
-        sender: 'user',
-        timestamp: new Date(),
-        voice: { audioUrl }
-      };
-
+      const userVoiceMessage: ExtendedMessage = { id: `voice-${Date.now()}`, text: transcribedText, sender: 'user', timestamp: new Date(), voice: { audioUrl } };
       setMessages(prev => [...prev, userVoiceMessage]);
       await sendMessage(transcribedText);
-
     } catch (error) {
-      console.error('Voice processing failed:', error);
-      const message = error instanceof Error 
-        ? error.message.includes('API key') 
-          ? 'Voice transcription failed: Please check your OpenAI API key configuration.'
-          : error.message
-        : 'Voice processing failed. Please try again.';
-      setErrorMessage(message);
+      setErrorMessage((error as Error).message.includes('API key') ? 'Voice transcription failed: Check OpenAI API key' : 'Voice processing failed');
     } finally {
       setIsProcessingVoice(false);
       setRecordingTime(0);
@@ -330,52 +207,33 @@ const ChatbotPreview: React.FC<ChatbotPreviewProps> = ({ visible, onClose, chatb
         audio.currentTime = 0;
       }
     });
-
     let audio = audioRefs.current.get(messageId);
-    
     if (!audio) {
       audio = new Audio(audioUrl);
       audioRefs.current.set(messageId, audio);
-      
-      audio.onended = () => {
-        setPlayingMessageId(null);
-      };
-      
+      audio.onended = () => setPlayingMessageId(null);
       audio.onerror = () => {
-        console.error('Audio playback error');
         setPlayingMessageId(null);
         setErrorMessage('Failed to play audio message');
       };
     }
-
     if (playingMessageId === messageId) {
       audio.pause();
       setPlayingMessageId(null);
     } else {
       audio.currentTime = 0;
-      audio.play().then(() => {
-        setPlayingMessageId(messageId);
-      }).catch(error => {
-        console.error('Audio play error:', error);
-        setErrorMessage('Failed to play audio message');
-      });
+      audio.play().then(() => setPlayingMessageId(messageId)).catch(() => setErrorMessage('Failed to play audio message'));
     }
   };
 
   const toggleTranscript = (messageId: string) => {
-    setShowTranscript(prev => ({
-      ...prev,
-      [messageId]: !prev[messageId]
-    }));
+    setShowTranscript(prev => ({ ...prev, [messageId]: !prev[messageId] }));
   };
 
   const handleSendMessage = async () => {
     if (!inputText.trim() || isTyping) return;
-
-    const messageText = inputText.trim();
+    await sendMessage(inputText.trim());
     setInputText('');
-
-    await sendMessage(messageText);
   };
 
   const handleKeyPress = (e: React.KeyboardEvent) => {
@@ -392,14 +250,11 @@ const ChatbotPreview: React.FC<ChatbotPreviewProps> = ({ visible, onClose, chatb
   };
 
   const toggleWidget = () => {
-    if (embedded) {
-      setIsWidgetOpen(!isWidgetOpen);
-    }
+    setIsWidgetOpen(!isWidgetOpen);
   };
 
   if (!visible) return null;
 
-  // Ensure we have a valid bot configuration with safe defaults
   const botConfig = bot || {
     id: 'preview-bot',
     name: 'AI Assistant',
@@ -409,45 +264,52 @@ const ChatbotPreview: React.FC<ChatbotPreviewProps> = ({ visible, onClose, chatb
       position: 'bottom-right',
       welcomeMessage: 'Hello! How can I help you today?',
       useCustomImage: false,
-      botImage: ''
+      botImage: '',
+      size: 'normal',
     }
   };
 
-  // Ensure configuration exists with safe defaults
   const safeConfig = {
     primaryColor: '#2563eb',
     position: 'bottom-right',
     welcomeMessage: 'Hello! How can I help you today?',
     useCustomImage: false,
     botImage: '',
+    size: 'normal',
     ...botConfig.configuration
   };
 
-  // Ensure name is always a string
   const safeName = botConfig.name || 'AI Assistant';
   const primaryColor = safeConfig.primaryColor || '#2563eb';
   const botImage = safeConfig.botImage;
   const useCustomImage = safeConfig.useCustomImage && botImage;
   const position = safeConfig.position || 'bottom-right';
+  const size = safeConfig.size || 'normal';
+
+  const sizeClasses = {
+    compact: 'w-64 h-80',
+    normal: 'w-80 h-96',
+    large: 'w-96 h-120',
+  };
+
+  const positionClasses = {
+    'bottom-right': 'bottom-6 right-6',
+    'bottom-left': 'bottom-6 left-6',
+    'center': 'top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2',
+  };
 
   // Widget mode for embedded chatbot - show widget button when closed
   if (embedded && !isWidgetOpen) {
-    const positionClasses = {
-      'bottom-right': 'bottom-6 right-6',
-      'bottom-left': 'bottom-6 left-6',
-      'center': 'top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2'
-    };
-
     return (
-      <div className={`fixed z-50 ${positionClasses[position as keyof typeof positionClasses] || positionClasses['bottom-right']}`}>
+      <div className={`fixed z-50 ${positionClasses[position]}`}>
         <button
           onClick={toggleWidget}
           className="w-16 h-16 rounded-full shadow-lg flex items-center justify-center text-white transition-all duration-200 hover:scale-110 hover:shadow-xl"
           style={{ backgroundColor: primaryColor }}
         >
           {useCustomImage ? (
-            <img 
-              src={botImage} 
+            <img
+              src={botImage}
               alt={safeName}
               className="w-12 h-12 rounded-full object-cover"
               onError={(e) => {
@@ -467,33 +329,28 @@ const ChatbotPreview: React.FC<ChatbotPreviewProps> = ({ visible, onClose, chatb
   // Determine container classes based on fullscreen state and embedded mode
   let containerClasses = '';
   if (embedded) {
-    const positionClasses = {
-      'bottom-right': 'fixed bottom-6 right-6 w-96 h-[600px] z-50',
-      'bottom-left': 'fixed bottom-6 left-6 w-96 h-[600px] z-50',
-      'center': 'fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-96 h-[600px] z-50'
-    };
-    containerClasses = positionClasses[position as keyof typeof positionClasses] || positionClasses['bottom-right'];
+    containerClasses = `fixed z-50 ${sizeClasses[size]} ${positionClasses[position]}`;
   } else {
-    containerClasses = isFullscreen 
-      ? "fixed inset-0 z-50" 
-      : "fixed right-6 top-20 bottom-6 w-80 z-50";
+    containerClasses = isFullscreen
+      ? 'fixed inset-0 z-50'
+      : 'fixed right-6 top-20 bottom-6 w-80 z-50';
   }
 
   return (
     <div className={containerClasses}>
       <div className="bg-white rounded-lg shadow-2xl border border-slate-200 h-full flex flex-col overflow-hidden">
-        <div 
+        <div
           className="p-4 border-b border-slate-200 flex items-center justify-between"
           style={{ backgroundColor: `${primaryColor}15` }}
         >
           <div className="flex items-center space-x-3">
-            <div 
+            <div
               className="w-8 h-8 rounded-full flex items-center justify-center text-white text-sm font-medium overflow-hidden"
               style={{ backgroundColor: useCustomImage ? 'transparent' : primaryColor }}
             >
               {useCustomImage ? (
-                <img 
-                  src={botImage} 
+                <img
+                  src={botImage}
                   alt={safeName}
                   className="w-full h-full object-cover rounded-full"
                   onError={(e) => {
@@ -569,8 +426,8 @@ const ChatbotPreview: React.FC<ChatbotPreviewProps> = ({ visible, onClose, chatb
                 <button
                   onClick={() => setReplyMode('text')}
                   className={`flex-1 flex items-center justify-center space-x-2 px-3 py-2 rounded-md text-sm font-medium transition-all ${
-                    replyMode === 'text' 
-                      ? 'bg-blue-100 text-blue-700 shadow-sm' 
+                    replyMode === 'text'
+                      ? 'bg-blue-100 text-blue-700 shadow-sm'
                       : 'text-slate-600 hover:text-slate-800'
                   }`}
                 >
@@ -581,7 +438,7 @@ const ChatbotPreview: React.FC<ChatbotPreviewProps> = ({ visible, onClose, chatb
                   onClick={() => setReplyMode('voice')}
                   disabled={!microphoneSupported}
                   className={`flex-1 flex items-center justify-center space-x-2 px-3 py-2 rounded-md text-sm font-medium transition-all ${
-                    replyMode === 'voice' 
+                    replyMode === 'voice'
                       ? 'bg-blue-100 text-blue-700 shadow-sm'
                       : 'text-slate-600 hover:text-slate-800'
                   } ${!microphoneSupported ? 'opacity-50 cursor-not-allowed' : ''}`}
@@ -603,10 +460,7 @@ const ChatbotPreview: React.FC<ChatbotPreviewProps> = ({ visible, onClose, chatb
               {errorMessage && (
                 <div className="mt-2 p-2 bg-red-100 text-red-600 text-xs text-center rounded">
                   {errorMessage}
-                  <button
-                    onClick={() => setErrorMessage(null)}
-                    className="ml-2 underline"
-                  >
+                  <button onClick={() => setErrorMessage(null)} className="ml-2 underline">
                     Dismiss
                   </button>
                 </div>
@@ -621,13 +475,13 @@ const ChatbotPreview: React.FC<ChatbotPreviewProps> = ({ visible, onClose, chatb
                 >
                   <div className="flex items-start space-x-2 max-w-[85%]">
                     {message.sender === 'bot' && (
-                      <div 
+                      <div
                         className="w-6 h-6 rounded-full flex items-center justify-center text-white text-xs font-medium flex-shrink-0 mt-1 overflow-hidden"
                         style={{ backgroundColor: useCustomImage ? 'transparent' : primaryColor }}
                       >
                         {useCustomImage ? (
-                          <img 
-                            src={botImage} 
+                          <img
+                            src={botImage}
                             alt={safeName}
                             className="w-full h-full object-cover rounded-full"
                             onError={(e) => {
@@ -644,17 +498,10 @@ const ChatbotPreview: React.FC<ChatbotPreviewProps> = ({ visible, onClose, chatb
                     )}
                     <div
                       className={`px-3 py-2 rounded-lg ${
-                        message.sender === 'user'
-                          ? 'text-white'
-                          : 'bg-slate-100 text-slate-800'
+                        message.sender === 'user' ? 'text-white' : 'bg-slate-100 text-slate-800'
                       }`}
-                      style={
-                        message.sender === 'user' 
-                          ? { backgroundColor: primaryColor }
-                          : {}
-                      }
+                      style={message.sender === 'user' ? { backgroundColor: primaryColor } : {}}
                     >
-                      {/* Voice message display - only show in voice mode */}
                       {message.voice && replyMode === 'voice' && (
                         <div className="mb-2">
                           <div className="flex items-center space-x-2 bg-black/10 rounded-lg p-2">
@@ -662,11 +509,7 @@ const ChatbotPreview: React.FC<ChatbotPreviewProps> = ({ visible, onClose, chatb
                               onClick={() => playVoiceMessage(message.id, message.voice!.audioUrl)}
                               className="p-1 rounded-full bg-white/20 hover:bg-white/30 transition-colors"
                             >
-                              {playingMessageId === message.id ? (
-                                <Pause className="w-3 h-3" />
-                              ) : (
-                                <Play className="w-3 h-3" />
-                              )}
+                              {playingMessageId === message.id ? <Pause className="w-3 h-3" /> : <Play className="w-3 h-3" />}
                             </button>
                             <div className="flex-1 h-1 bg-white/20 rounded-full">
                               <div className="h-full bg-white/40 rounded-full" style={{ width: '0%' }}></div>
@@ -684,15 +527,12 @@ const ChatbotPreview: React.FC<ChatbotPreviewProps> = ({ visible, onClose, chatb
                           </div>
                         </div>
                       )}
-
-                      {/* Text content - show transcript only if toggled on for user voice messages, or always for text/bot messages */}
-                      {(replyMode === 'text' || 
-                        !message.voice || 
+                      {(replyMode === 'text' ||
+                        !message.voice ||
                         message.sender === 'bot' ||
                         (message.sender === 'user' && showTranscript[message.id])) && (
                         <p className="text-sm whitespace-pre-wrap">{message.text}</p>
                       )}
-                      
                       {message.sources && message.sources.length > 0 && (
                         <div className="mt-2 pt-2 border-t border-slate-200">
                           <div className="flex items-center space-x-1 text-xs text-slate-500">
@@ -701,7 +541,6 @@ const ChatbotPreview: React.FC<ChatbotPreviewProps> = ({ visible, onClose, chatb
                           </div>
                         </div>
                       )}
-                      
                       <p className="text-xs opacity-70 mt-1">
                         {message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                       </p>
@@ -709,17 +548,16 @@ const ChatbotPreview: React.FC<ChatbotPreviewProps> = ({ visible, onClose, chatb
                   </div>
                 </div>
               ))}
-              
               {isTyping && (
                 <div className="flex justify-start">
                   <div className="flex items-start space-x-2 max-w-[85%]">
-                    <div 
+                    <div
                       className="w-6 h-6 rounded-full flex items-center justify-center text-white text-xs font-medium flex-shrink-0 mt-1 overflow-hidden"
                       style={{ backgroundColor: useCustomImage ? 'transparent' : primaryColor }}
                     >
                       {useCustomImage ? (
-                        <img 
-                          src={botImage} 
+                        <img
+                          src={botImage}
                           alt={safeName}
                           className="w-full h-full object-cover rounded-full"
                           onError={(e) => {
@@ -743,7 +581,6 @@ const ChatbotPreview: React.FC<ChatbotPreviewProps> = ({ visible, onClose, chatb
                   </div>
                 </div>
               )}
-              
               <div ref={messagesEndRef} />
             </div>
 
@@ -763,7 +600,7 @@ const ChatbotPreview: React.FC<ChatbotPreviewProps> = ({ visible, onClose, chatb
                     />
                   </div>
                   <div className="flex items-center space-x-1">
-                    <button 
+                    <button
                       className="p-2 text-slate-400 hover:text-slate-600 transition-colors"
                       title="Attach file"
                       disabled={isTyping}
@@ -789,23 +626,22 @@ const ChatbotPreview: React.FC<ChatbotPreviewProps> = ({ visible, onClose, chatb
                         onClick={isRecording ? stopRecording : startRecording}
                         disabled={!OPENAI_API_KEY || !microphoneSupported}
                         className={`p-4 rounded-full transition-all duration-200 ${
-                          isRecording 
-                            ? 'bg-red-500 hover:bg-red-600 text-white shadow-lg scale-110' 
+                          isRecording
+                            ? 'bg-red-500 hover:bg-red-600 text-white shadow-lg scale-110'
                             : 'bg-blue-500 hover:bg-blue-600 text-white shadow-md'
                         } disabled:opacity-50 disabled:cursor-not-allowed`}
                         title={
-                          !microphoneSupported 
+                          !microphoneSupported
                             ? 'Microphone not supported or permission denied'
                             : !OPENAI_API_KEY
                             ? 'OpenAI API key required for voice features'
-                            : isRecording 
-                            ? 'Stop recording' 
+                            : isRecording
+                            ? 'Stop recording'
                             : 'Start voice recording'
                         }
                       >
                         {isRecording ? <MicOff className="w-6 h-6" /> : <Mic className="w-6 h-6" />}
                       </button>
-                      
                       {isRecording && (
                         <div className="flex items-center space-x-2">
                           <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse"></div>
@@ -816,19 +652,17 @@ const ChatbotPreview: React.FC<ChatbotPreviewProps> = ({ visible, onClose, chatb
                       )}
                     </div>
                   </div>
-
                   <div className="text-center">
                     <p className="text-xs text-slate-500">
                       {!microphoneSupported
                         ? 'Voice features require HTTPS and microphone permissions'
-                        : isRecording 
+                        : isRecording
                         ? 'Recording... Tap the microphone to stop'
                         : 'Tap the microphone to start recording'}
                     </p>
                   </div>
                 </div>
               )}
-              
               <div className="mt-2 flex items-center justify-between text-xs text-slate-500">
                 <div className="flex items-center space-x-2">
                   {bot?.knowledge_base_id && (
@@ -844,7 +678,6 @@ const ChatbotPreview: React.FC<ChatbotPreviewProps> = ({ visible, onClose, chatb
                     </div>
                   )}
                 </div>
-                
                 {OPENAI_API_KEY ? (
                   <div className="flex items-center space-x-1">
                     <div className="w-2 h-2 bg-green-500 rounded-full"></div>
