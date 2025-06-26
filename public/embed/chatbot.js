@@ -24,9 +24,9 @@
     height: 600px;
     z-index: 999999;
     border-radius: 12px;
-    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
+    // box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
     overflow: hidden;
-    border: 1px solid #e2e8f0;
+    // border: 1px solid #e2e8f0;
   `;
 
   // Create iframe
@@ -65,8 +65,8 @@
         width: 100%;
         height: 100%;
         z-index: 999999;
-        border-radius: 0;
-        box-shadow: none;
+        // border-radius: 0;
+        // box-shadow: none;
         overflow: hidden;
         border: none;
       `;
@@ -78,10 +78,10 @@
         width: 400px;
         height: 600px;
         z-index: 999999;
-        border-radius: 12px;
-        box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
+        // border-radius: 12px;
+        // box-shadow: 0 10px 2px rgba(0, 0, 0, 0.15);
         overflow: hidden;
-        border: 1px solid #e2e8f0;
+        // border: 1px solid #e2e8f0;
       `;
     }
   }
