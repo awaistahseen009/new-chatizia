@@ -302,7 +302,7 @@ const ChatbotPreview: React.FC<ChatbotPreviewProps> = ({ visible, onClose, chatb
 
   if (embedded && !isWidgetOpen) {
     return (
-      <div className={`fixed z-50 ${positionClasses[position]}`}>
+      <div className={`fixed z-60 ${positionClasses[position]}`}>
         <button
           onClick={toggleWidget}
           className="w-16 h-16 rounded-full shadow-lg flex items-center justify-center text-white transition-all duration-200 hover:scale-110 hover:shadow-xl"
@@ -329,11 +329,11 @@ const ChatbotPreview: React.FC<ChatbotPreviewProps> = ({ visible, onClose, chatb
 
   let containerClasses = '';
   if (embedded) {
-    containerClasses = `fixed z-50 ${sizeClass || sizeClasses[size]} h-full ${positionClass || positionClasses[position]}`;
+    containerClasses = `fixed z-60 ${sizeClass || sizeClasses[size]} h-full ${positionClass || positionClasses[position]}`;
   } else {
     containerClasses = isFullscreen
-      ? 'fixed inset-0 z-50'
-      : 'fixed right-6 top-20 bottom-6 w-80 z-50';
+      ? 'fixed inset-0 z-60'
+      : 'fixed right-6 top-20 bottom-6 w-80 z-60';
   }
 
   return (
