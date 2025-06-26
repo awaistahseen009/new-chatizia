@@ -9,6 +9,8 @@ interface ChatbotPreviewProps {
   onClose: () => void;
   chatbot?: any;
   embedded?: boolean;
+  positionClass?: string;
+  sizeClass?: string;
 }
 
 interface VoiceMessage {
@@ -26,7 +28,7 @@ interface ExtendedMessage {
   voice?: VoiceMessage;
 }
 
-const ChatbotPreview: React.FC<ChatbotPreviewProps> = ({ visible, onClose, chatbot: propChatbot, embedded = false }) => {
+const ChatbotPreview: React.FC<ChatbotPreviewProps> = ({ visible, onClose, chatbot: propChatbot, embedded = false, positionClass = 'bottom-6 right-6', sizeClass = 'w-80' }) => {
   let selectedBot = null;
   try {
     const context = useChatbotContext();
@@ -287,18 +289,17 @@ const ChatbotPreview: React.FC<ChatbotPreviewProps> = ({ visible, onClose, chatb
   const size = safeConfig.size || 'normal';
 
   const sizeClasses = {
-    compact: 'w-64 h-80',
-    normal: 'w-80 h-96',
-    large: 'w-96 h-120',
+    compact: 'w-64',
+    normal: 'w-80',
+    large: 'w-96',
   };
 
   const positionClasses = {
     'bottom-right': 'bottom-6 right-6',
     'bottom-left': 'bottom-6 left-6',
-    'center': 'top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2',
+    center: 'bottom-6 left-1/2 transform -translate-x-1/2',
   };
 
-  // Widget mode for embedded chatbot - show widget button when closed
   if (embedded && !isWidgetOpen) {
     return (
       <div className={`fixed z-50 ${positionClasses[position]}`}>
@@ -326,10 +327,9 @@ const ChatbotPreview: React.FC<ChatbotPreviewProps> = ({ visible, onClose, chatb
     );
   }
 
-  // Determine container classes based on fullscreen state and embedded mode
   let containerClasses = '';
   if (embedded) {
-    containerClasses = `fixed z-50 ${sizeClasses[size]} ${positionClasses[position]}`;
+    containerClasses = `fixed z-50 ${sizeClass || sizeClasses[size]} h-full ${positionClass || positionClasses[position]}`;
   } else {
     containerClasses = isFullscreen
       ? 'fixed inset-0 z-50'
