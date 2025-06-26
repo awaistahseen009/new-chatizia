@@ -171,18 +171,19 @@ const ChatbotEmbed: React.FC = () => {
   }
 
   // Render embedded chatbot - ALWAYS show the widget
-  if (isEmbedded) {
-    return (
-      <div className="w-full h-full min-h-screen" style={{ background: 'transparent' }}>
-        <ChatbotPreview 
-          visible={true} 
-          onClose={() => {}} 
-          chatbot={chatbot}
-          embedded={true}
-        />
-      </div>
-    );
-  }
+ // Render embedded chatbot - ALWAYS show the widget
+if (isEmbedded) {
+  return (
+    <div className="w-full h-auto" style={{ background: 'transparent' }}>
+      <ChatbotPreview 
+        visible={true} 
+        onClose={() => {}} 
+        chatbot={chatbot}
+        embedded={true}
+      />
+    </div>
+  );
+}
 
   // Render full-page chatbot
   return (
